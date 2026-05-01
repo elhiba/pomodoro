@@ -1,4 +1,5 @@
 #include "PomodoroWindow.hpp"
+#include "TimerWidget.hpp"
 
 PomodoroWindow::PomodoroWindow()
 {
@@ -11,6 +12,38 @@ PomodoroWindow::PomodoroWindow()
 	_maximizeButton = new QPushButton(NULL, this);
 	_closeButton = new QPushButton(NULL, this);
 
+	QLabel *PomodoroTitle = new QLabel("Pomodoro", this);
+
+	QWidget *titleBarContainer = new QWidget(this);
+	titleBarContainer->setFixedHeight(40);
+
+	QGridLayout *titleBarLayout = new QGridLayout(titleBarContainer);
+	titleBarLayout->setContentsMargins(0, 0, 0, 0);
+	titleBarLayout->addWidget(PomodoroTitle, 0, 1, Qt::AlignCenter);
+
+	QHBoxLayout *buttonsLayout = new QHBoxLayout();
+	buttonsLayout->addWidget(_minimizeButton);
+	buttonsLayout->addWidget(_maximizeButton);
+	buttonsLayout->addWidget(_closeButton);
+
+	titleBarLayout->addLayout(buttonsLayout, 0, 2, Qt::AlignRight | Qt::AlignVCenter);
+
+	titleBarLayout->setColumnStretch(0, 1);
+	titleBarLayout->setColumnStretch(1, 0);
+	titleBarLayout->setColumnStretch(2, 1);
+
+
+	QVBoxLayout *mainLayout = new QVBoxLayout(this);
+	mainLayout->setContentsMargins(0, 0, 0, 0);
+	mainLayout->addWidget(titleBarContainer);
+	mainLayout->addStretch();
+
+	
+	QWidget	*timer = new TimerWidget(this);
+
+	mainLayout->addWidget(timer);
+	mainLayout->addStretch();
+
 	designWindow();
 	
 	QObject::connect(_closeButton, &QPushButton::clicked, this, &QApplication::quit);
@@ -18,22 +51,22 @@ PomodoroWindow::PomodoroWindow()
 	QObject::connect(_minimizeButton, &QPushButton::clicked, this, &QWidget::showMinimized);
 }
 
-void	PomodoroWindow::resizeEvent(QResizeEvent *event)
+void	PomodoroWindow::changeEvent(QEvent *event)
 {
-	_closeButton->move(this->width() - _closeButton->width(), 0);
-	_maximizeButton->move(this->width() - (_maximizeButton->width() + _closeButton->width()), 0);
-	_minimizeButton->move(this->width() - (_minimizeButton->width() + _maximizeButton->width() + _closeButton->width()), 0);
-
 	// changing icon while maximizing reverse maximizing!
-	(this->isMaximized() ? _maximizeButton->setIcon(QIcon(":/assets/icons/maximizeReverse.svg")) : _maximizeButton->setIcon(QIcon(":/assets/icons/maximize.svg")));
+	 if (event->type() == QEvent::WindowStateChange) {
+		(this->isMaximized()	? _maximizeButton->setIcon(QIcon(":/assets/icons/maximizeReverse.svg"))
+								: _maximizeButton->setIcon(QIcon(":/assets/icons/maximize.svg"))
+		);
+	}
 
-	QWidget::resizeEvent(event);
+	QWidget::changeEvent(event);
 }
 
 void	PomodoroWindow::designWindow()
 {
 	_closeButton->setIcon(QIcon(":/assets/icons/close.svg"));
-	_closeButton->resize(45, 30);
+	_closeButton->setFixedSize(45, 30);
 	_closeButton->setStyleSheet(
 			"QPushButton { color: #FFFFFF; background: transparent; border: none; font-size: 14px; }"
 			"QPushButton:hover { background: red; color: #FFFFFF; }"
@@ -41,7 +74,7 @@ void	PomodoroWindow::designWindow()
 		);
 
 	_maximizeButton->setIcon(QIcon(":/assets/icons/maximize.svg"));
-	_maximizeButton->resize(45, 30);
+	_maximizeButton->setFixedSize(45, 30);
 	_maximizeButton->setStyleSheet(
 			"QPushButton { color: #FFFFFF; background: transparent; border: none; font-size: 14px; }"
 			"QPushButton:hover { background: grey; }"
@@ -49,11 +82,10 @@ void	PomodoroWindow::designWindow()
 		);
 
 	_minimizeButton->setIcon(QIcon(":/assets/icons/minimize.svg"));
-	_minimizeButton->resize(45, 30);
+	_minimizeButton->setFixedSize(45, 30);
 	_minimizeButton->setStyleSheet(
 			"QPushButton { color: #FFFFFF; background: transparent; border: none; font-size: 14px; }"
 			"QPushButton:hover { background: grey; }"
 			"QPushButton:pressed { background: #FFFFFF; }"
 		);
-
 }

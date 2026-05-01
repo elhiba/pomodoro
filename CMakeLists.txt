@@ -11,7 +11,7 @@ set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 
-set(SRC main.cpp PomodoroWindow.cpp assets.qrc)
+set(SRC main.cpp PomodoroWindow.cpp TimerWidget.cpp assets.qrc)
 
 list(TRANSFORM SRC PREPEND "src/")
 
