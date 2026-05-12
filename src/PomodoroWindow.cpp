@@ -1,25 +1,38 @@
 #include "PomodoroWindow.hpp"
 #include "TimerWidget.hpp"
 
+#include <QFontDatabase>
+#include <QFont>
+#include <iostream>
+
 PomodoroWindow::PomodoroWindow()
 {
 	this->setStyleSheet("background-color: #1c1e2b; ");
 	this->resize(1920/2, 1080/2);
 	this->setWindowFlags(Qt::FramelessWindowHint);
+	//this->setAttribute(Qt::WA_TranslucentBackground);
 
 
 	_minimizeButton = new QPushButton(NULL, this);
 	_maximizeButton = new QPushButton(NULL, this);
 	_closeButton = new QPushButton(NULL, this);
 
+	assetsLoader();
+
+	designWindow();
+
 	QLabel *PomodoroTitle = new QLabel("Pomodoro", this);
+	PomodoroTitle->setFont(_PlaywriteFont);
 
 	QWidget *titleBarContainer = new QWidget(this);
+	// debugger
+	titleBarContainer->setStyleSheet("border: 1px solid red;");
 	titleBarContainer->setFixedHeight(40);
 
 	QGridLayout *titleBarLayout = new QGridLayout(titleBarContainer);
 	titleBarLayout->setContentsMargins(0, 0, 0, 0);
 	titleBarLayout->addWidget(PomodoroTitle, 0, 1, Qt::AlignCenter);
+	// debug QGridLay
 
 	QHBoxLayout *buttonsLayout = new QHBoxLayout();
 	buttonsLayout->addWidget(_minimizeButton);
@@ -38,17 +51,37 @@ PomodoroWindow::PomodoroWindow()
 	mainLayout->addWidget(titleBarContainer);
 	mainLayout->addStretch();
 
+
 	
 	QWidget	*timer = new TimerWidget(this);
+	timer->setStyleSheet("border: 1px solid brown;");
 
 	mainLayout->addWidget(timer);
 	mainLayout->addStretch();
 
-	designWindow();
 	
 	QObject::connect(_closeButton, &QPushButton::clicked, this, &QApplication::quit);
 	QObject::connect(_maximizeButton, &QPushButton::clicked, this, [this](){this->isMaximized() ? this->showNormal() : this->showMaximized();});
 	QObject::connect(_minimizeButton, &QPushButton::clicked, this, &QWidget::showMinimized);
+}
+
+void	PomodoroWindow::execute()
+{
+
+}
+
+void	PomodoroWindow::assetsLoader()
+{
+	int	PlaywriteFontId = QFontDatabase::addApplicationFont(":assets/fonts/PlaywriteAR.ttf");
+	if (PlaywriteFontId == -1)
+		std::cerr << "font not loaded" << std::endl;
+
+	_PlaywriteFont = QFont(QFontDatabase::applicationFontFamilies(PlaywriteFontId).at(0), 16);
+
+
+	_closeButton->setIcon(QIcon(":/assets/icons/close.svg"));
+	_maximizeButton->setIcon(QIcon(":/assets/icons/maximize.svg"));
+	_minimizeButton->setIcon(QIcon(":/assets/icons/minimize.svg"));
 }
 
 void	PomodoroWindow::changeEvent(QEvent *event)
@@ -65,25 +98,25 @@ void	PomodoroWindow::changeEvent(QEvent *event)
 
 void	PomodoroWindow::designWindow()
 {
-	_closeButton->setIcon(QIcon(":/assets/icons/close.svg"));
 	_closeButton->setFixedSize(45, 30);
 	_closeButton->setStyleSheet(
+			"border: 1px solid red;"
 			"QPushButton { color: #FFFFFF; background: transparent; border: none; font-size: 14px; }"
 			"QPushButton:hover { background: red; color: #FFFFFF; }"
 			"QPushButton:pressed { background: #c9383b; }"
 		);
 
-	_maximizeButton->setIcon(QIcon(":/assets/icons/maximize.svg"));
 	_maximizeButton->setFixedSize(45, 30);
 	_maximizeButton->setStyleSheet(
+			"border: 1px solid red;"
 			"QPushButton { color: #FFFFFF; background: transparent; border: none; font-size: 14px; }"
 			"QPushButton:hover { background: grey; }"
 			"QPushButton:pressed { background: #FFFFFF; }"
 		);
 
-	_minimizeButton->setIcon(QIcon(":/assets/icons/minimize.svg"));
 	_minimizeButton->setFixedSize(45, 30);
 	_minimizeButton->setStyleSheet(
+			"border: 1px solid red;"
 			"QPushButton { color: #FFFFFF; background: transparent; border: none; font-size: 14px; }"
 			"QPushButton:hover { background: grey; }"
 			"QPushButton:pressed { background: #FFFFFF; }"

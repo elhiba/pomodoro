@@ -6,8 +6,10 @@ int main(int ac, char *av[])
 {
 	QApplication pomodoro(ac, av);
 
-	PomodoroWindow window;
+	PomodoroWindow pomodoroWindow;
 
-	window.show();
+	pomodoroWindow.setStyleSheet("border: 1px solid blue; background-color: rgba(0, 0, 0, 0);");
+
+	pomodoroWindow.show();
 	return (pomodoro.exec());
 }

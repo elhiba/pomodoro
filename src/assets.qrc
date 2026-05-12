@@ -4,5 +4,6 @@
         <file>../assets/icons/maximize.svg</file>
         <file>../assets/icons/maximizeReverse.svg</file>
         <file>../assets/icons/minimize.svg</file>
+        <file>../assets/fonts/PlaywriteAR.ttf</file>
     </qresource>
 </RCC>

@@ -14,8 +14,13 @@ class PomodoroWindow : public QWidget
 		QPushButton	*_maximizeButton;
 		QPushButton	*_closeButton;
 
+		QFont		_PlaywriteFont;
+
 	public:
 		PomodoroWindow();
+
+		void	assetsLoader();
+		void	execute();
 
 	protected:
 		void	changeEvent(QEvent *event) override;
