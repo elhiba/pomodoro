@@ -3,11 +3,26 @@
 
 #include <QWidget>
 #include <QLabel>
+#include <QQuickWidget>
+#include <QPushButton>
 
 class TimerWidget : public QWidget
 {
+
+	private slots:
+		void	updateTimer();
+
 	private:
-		QLabel	*_timer;
+		QQuickWidget *_qmlTimerView;
+		QTimer	*_countdownTimer;
+		int		_totalSeconds = 25 * 60;
+		int		_remainSeconds;
+		bool	_start = false;
+
+		QPushButton	*_playButton;
+
+		void	startButton();
+
 	public:
 		TimerWidget(QWidget *parent);
 };

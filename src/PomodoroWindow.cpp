@@ -7,7 +7,7 @@
 
 PomodoroWindow::PomodoroWindow()
 {
-	this->setStyleSheet("background-color: #1c1e2b; ");
+	this->setStyleSheet("background-color: #12130F; ");
 	this->resize(1920/2, 1080/2);
 	this->setWindowFlags(Qt::FramelessWindowHint);
 	//this->setAttribute(Qt::WA_TranslucentBackground);
@@ -22,6 +22,7 @@ PomodoroWindow::PomodoroWindow()
 	designWindow();
 
 	QLabel *PomodoroTitle = new QLabel("Pomodoro", this);
+	PomodoroTitle->setStyleSheet("color: white;");
 	PomodoroTitle->setFont(_PlaywriteFont);
 
 	QWidget *titleBarContainer = new QWidget(this);
@@ -72,24 +73,24 @@ void	PomodoroWindow::execute()
 
 void	PomodoroWindow::assetsLoader()
 {
-	int	PlaywriteFontId = QFontDatabase::addApplicationFont(":assets/fonts/PlaywriteAR.ttf");
+	int	PlaywriteFontId = QFontDatabase::addApplicationFont(":/PlaywriteARFont");
 	if (PlaywriteFontId == -1)
 		std::cerr << "font not loaded" << std::endl;
 
 	_PlaywriteFont = QFont(QFontDatabase::applicationFontFamilies(PlaywriteFontId).at(0), 16);
 
 
-	_closeButton->setIcon(QIcon(":/assets/icons/close.svg"));
-	_maximizeButton->setIcon(QIcon(":/assets/icons/maximize.svg"));
-	_minimizeButton->setIcon(QIcon(":/assets/icons/minimize.svg"));
+	_closeButton->setIcon(QIcon(":/closeButton"));
+	_maximizeButton->setIcon(QIcon(":/maximizeButton"));
+	_minimizeButton->setIcon(QIcon(":/minimizeButton"));
 }
 
 void	PomodoroWindow::changeEvent(QEvent *event)
 {
 	// changing icon while maximizing reverse maximizing!
 	 if (event->type() == QEvent::WindowStateChange) {
-		(this->isMaximized()	? _maximizeButton->setIcon(QIcon(":/assets/icons/maximizeReverse.svg"))
-								: _maximizeButton->setIcon(QIcon(":/assets/icons/maximize.svg"))
+		(this->isMaximized()	? _maximizeButton->setIcon(QIcon(":/maximizeReverseButton"))
+								: _maximizeButton->setIcon(QIcon(":/maximizeButton"))
 		);
 	}
 
