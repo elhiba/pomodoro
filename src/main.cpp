@@ -1,39 +1,14 @@
-#include <QApplication>
-#include <QSharedMemory>
-#include <QMessageBox>
-#include <QDebug>
-#include "PomodoroWindow.hpp"
+#include <QGuiApplication>
+#include <QQmlApplicationEngine>
 
-int main(int ac, char *av[])
+int main(int ac, char **av)
 {
-	QCoreApplication::setApplicationName("pomodoro");
-    QGuiApplication::setDesktopFileName("pomodoro");
-	QApplication pomodoro(ac, av);
+	QGuiApplication pomodoro(ac, av);
+	QQmlApplicationEngine engine;
 
-	QSharedMemory SharedMemory("pomodoro_KeyInstance");
+	const QUrl url(QStringLiteral("qrc:/main.qml"));
 
-	//if (!SharedMemory.create(1))
-	//{
-	//	qWarning() << "Pomodoro is already running";
+	engine.load(url);
 
-	//	QMessageBox miniBox;
-
-	//	miniBox.setWindowTitle("Pomodoro");
-	//	miniBox.setText("Pomodoro Already open!");
-	//	QPixmap ico(":/pomodoroLogoTrans");
-	//	miniBox.setIconPixmap(ico.scaled(64, 64, Qt::KeepAspectRatio, Qt::SmoothTransformation));
-	//	miniBox.setFixedSize(350,150);
-	//	miniBox.setWindowFlags(Qt::FramelessWindowHint);
-	//	miniBox.exec();
-	//	return EXIT_SUCCESS;
-	//}
-
-	PomodoroWindow pomodoroWindow;
-
-	pomodoro.setWindowIcon(QIcon(":/pomodoroLogo.png"));
-
-	//pomodoroWindow.setStyleSheet("border: 1px solid red;");
-
-	pomodoroWindow.show();
-	return pomodoro.exec();
+    return pomodoro.exec();
 }

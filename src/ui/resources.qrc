@@ -1,0 +1,14 @@
+<RCC>
+	<qresource prefix="/">
+		<file>main.qml</file>
+		<file>TopMenu.qml</file>
+		
+		<file alias="close">../../assets/icons/close.svg</file>
+		<file alias="maximize">../../assets/icons/maximize.svg</file>
+		<file alias="maximizeReverse">../../assets/icons/maximizeReverse.svg</file>
+		<file alias="minimize">../../assets/icons/minimize.svg</file>
+
+		<file alias="pomodoroFont">../../assets/fonts/PlaywriteAR.ttf</file>
+		<file alias="timerFont">../../assets/fonts/JetBrainsMono.ttf</file>
+	</qresource>
+</RCC>
