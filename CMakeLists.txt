@@ -10,12 +10,14 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_AUTOMOC ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Widgets Quick QuickWidgets)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Quick QuickWidgets Multimedia)
 
-set(SRC main.cpp PomodoroWindow.cpp TimerWidget.cpp assets.qrc)
+set(SRC main.cpp PomodoroWindow.cpp TimerWidget.cpp SettingsWidget.cpp assets.qrc)
 
 list(TRANSFORM SRC PREPEND "src/")
 
-add_executable(pomodoro ${SRC})
+qt_add_executable(pomodoro ${SRC})
 
-target_link_libraries(pomodoro PRIVATE Qt6::Widgets Qt6::Quick Qt6::QuickWidgets)
+qt_import_plugins(pomodoro INCLUDE Qt6::QWaylandIntegrationPlugin Qt6::QXcbIntegrationPlugin)
+
+target_link_libraries(pomodoro PRIVATE Qt6::Widgets Qt6::Quick Qt6::QuickWidgets Qt6::Multimedia)

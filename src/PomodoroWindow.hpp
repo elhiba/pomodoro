@@ -7,14 +7,28 @@
 #include <QHBoxLayout>
 #include <QLabel>
 
+#include "SettingsWidget.hpp"
+
+class SettingsWidget;
+
 class PomodoroWindow : public QWidget
 {
 	private:
-		QPushButton	*_minimizeButton;
-		QPushButton	*_maximizeButton;
-		QPushButton	*_closeButton;
+		QPushButton		*_minimizeButton;
+		QPushButton		*_maximizeButton;
+		QPushButton		*_closeButton;
+		QPushButton		*_menuButton;
 
-		QFont		_PlaywriteFont;
+		QFont			_PlaywriteFont;
+
+		SettingsWidget	*_settingsWidget;
+		bool			_isSettingsOpen = false;
+
+	    bool _autoStartTimer = false;
+	    bool _autoStartMusic = true;
+
+	private slots:
+		void	toggleSettings();
 
 	public:
 		PomodoroWindow();
@@ -26,6 +40,7 @@ class PomodoroWindow : public QWidget
 		void	changeEvent(QEvent *event) override;
 		void	designWindow();
 		void	mousePressEvent();
+		void    resizeEvent(QResizeEvent *event) override;
 };
 
 #endif
