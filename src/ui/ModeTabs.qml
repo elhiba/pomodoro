@@ -64,7 +64,10 @@ Row
 			}
 
 			onClicked:
+			{
+				SoundPlayer.playClick()
 				rootTabs.timer.setMode(tabBtn.modelData.mode)
+			}
 		}
 	}
 }

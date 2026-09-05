@@ -40,6 +40,18 @@ Window
 
 		autoStartBreaks: AppSettings.autoStartBreaks
 		autoStartFocus: AppSettings.autoStartFocus
+
+		onSessionFinished:
+			SoundPlayer.playAlarm()
+	}
+
+	// Also forces the singleton into existence at start-up, so the samples are decoded
+	// well before the first session ends instead of on the first play.
+	Binding
+	{
+		target: SoundPlayer
+		property: "volume"
+		value: AppSettings.alarmVolume
 	}
 
 	TopMenu

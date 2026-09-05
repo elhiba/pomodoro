@@ -113,7 +113,10 @@ Item
 					}
 
 					onClicked:
+					{
+						SoundPlayer.playClick()
 						rootTimer.timer.toggle()
+					}
 				}
 
 				Button
@@ -155,7 +158,10 @@ Item
 					icon.height: resetBtn.height * 0.5
 
 					onClicked:
+					{
+						SoundPlayer.playClick()
 						rootTimer.timer.reset()
+					}
 				}
 			}
 		}

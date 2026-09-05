@@ -231,6 +231,33 @@ Item
 					onToggleRequested: (wanted) => AppSettings.autoStartFocus = wanted
 				}
 
+				Rectangle
+				{
+					width: parent.width
+					height: 1
+					color: Qt.rgba(1, 1, 1, 0.15)
+				}
+
+				Text
+				{
+					text: "SOUND"
+					color: Qt.rgba(1, 1, 1, 0.6)
+					font.pixelSize: 11
+					font.bold: true
+					font.letterSpacing: 1.2
+					topPadding: 14
+					bottomPadding: 6
+				}
+
+				SliderSetting
+				{
+					label: "Alarm volume"
+					value: AppSettings.alarmVolume
+
+					onValueModified: (newValue) => AppSettings.alarmVolume = newValue
+					onPreviewRequested: SoundPlayer.playAlarm()
+				}
+
 				Item
 				{
 					width: 1

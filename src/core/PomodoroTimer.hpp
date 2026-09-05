@@ -102,7 +102,9 @@ class PomodoroTimer : public QObject
 
 		// Emitted the moment a session runs out. Phase 3 hangs the alarm off this,
 		// phase 4 the task counter and phase 5 the session log.
-		void	sessionFinished(Mode finished, Mode next);
+		// Qualified on purpose: moc records the parameter type verbatim, and QML cannot
+		// resolve a bare "Mode" back to the registered enum.
+		void	sessionFinished(PomodoroTimer::Mode finished, PomodoroTimer::Mode next);
 
 	private slots:
 		void	onTick();
