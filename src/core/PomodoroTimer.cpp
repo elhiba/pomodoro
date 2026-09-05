@@ -308,6 +308,9 @@ void	PomodoroTimer::finishSession()
 {
 	Mode	finished = _mode;
 
+	// Read before setMode re-arms the clock for the next session.
+	int		durationSeconds = static_cast<int>(_totalMs / 1000);
+
 	_tickTimer.stop();
 
 	if (finished == Focus)
@@ -322,7 +325,7 @@ void	PomodoroTimer::finishSession()
 
 	// Announced before anything auto starts, so a listener sees the finished session
 	// settled at the top of the next one rather than already counting down.
-	emit sessionFinished(finished, next);
+	emit sessionFinished(finished, next, durationSeconds);
 
 	bool	autoStart = (next == Focus) ? _autoStartFocus : _autoStartBreaks;
 

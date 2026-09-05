@@ -41,8 +41,16 @@ Window
 		autoStartBreaks: AppSettings.autoStartBreaks
 		autoStartFocus: AppSettings.autoStartFocus
 
-		onSessionFinished:
+		onSessionFinished: (finished, next, durationSeconds) =>
+		{
 			SoundPlayer.playAlarm()
+			sessionLog.recordSession(finished, durationSeconds)
+		}
+	}
+
+	SessionLog
+	{
+		id: sessionLog
 	}
 
 	// Also forces the singleton into existence at start-up, so the samples are decoded
@@ -59,8 +67,18 @@ Window
 		themeColor: mainWindow.themeColor
 		progress: pomodoroTimer.progress
 
+		// Only one drawer at a time, they come in from opposite sides.
 		onSettingsRequested:
+		{
+			statsPanel.open = false
 			settingsPanel.open = !settingsPanel.open
+		}
+
+		onStatsRequested:
+		{
+			settingsPanel.open = false
+			statsPanel.open = !statsPanel.open
+		}
 	}
 
 	ModeTabs
@@ -86,13 +104,23 @@ Window
 		themeColor: mainWindow.themeColor
 	}
 
-	// Last, so the drawer and its scrim sit above everything else.
+	// Last, so the drawers and their scrims sit above everything else.
 	SettingsPanel
 	{
 		id: settingsPanel
 
 		anchors.fill: parent
 		themeColor: mainWindow.themeColor
+	}
+
+	StatsPanel
+	{
+		id: statsPanel
+
+		anchors.fill: parent
+		themeColor: mainWindow.themeColor
+
+		log: sessionLog
 	}
 
 }

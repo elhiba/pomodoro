@@ -11,6 +11,7 @@ Rectangle
 	property real progress: 1.0
 
 	signal settingsRequested()
+	signal statsRequested()
 
     color: rootMenu.themeColor
 
@@ -47,6 +48,55 @@ Rectangle
 
         onClicked:
             rootMenu.settingsRequested()
+    }
+
+	Button
+	{
+		id: statsBtn
+
+        width: 40
+        height: 40
+
+        anchors.left: menuBtn.right
+
+        background: Rectangle { color: statsBtn.hovered ? "#929494" : "transparent" }
+
+        // Drawn rather than loaded: there is no chart icon in assets, and a wrong
+        // icon reads worse than three bars.
+        contentItem: Row
+        {
+            spacing: 3
+
+            Rectangle
+            {
+                width: 3
+                height: 8
+                y: (statsBtn.height - 16) / 2 + 8
+                color: "#e3e3e3"
+                radius: 1
+            }
+
+            Rectangle
+            {
+                width: 3
+                height: 16
+                y: (statsBtn.height - 16) / 2
+                color: "#e3e3e3"
+                radius: 1
+            }
+
+            Rectangle
+            {
+                width: 3
+                height: 12
+                y: (statsBtn.height - 16) / 2 + 4
+                color: "#e3e3e3"
+                radius: 1
+            }
+        }
+
+        onClicked:
+            rootMenu.statsRequested()
     }
 
 	Text
