@@ -10,6 +10,8 @@ Rectangle
 	property color themeColor: "#12130F"
 	property real progress: 1.0
 
+	signal settingsRequested()
+
     color: rootMenu.themeColor
 
 	Behavior on color
@@ -28,6 +30,23 @@ Rectangle
         anchors.fill: parent
         onPressed:
 			Window.window.startSystemMove()
+    }
+
+	Button
+	{
+		id: menuBtn
+
+        width: 40
+        height: 40
+
+        anchors.left: parent.left
+
+        background: Rectangle { color: menuBtn.hovered ? "#929494" : "transparent" }
+
+        icon.source: "assets/icons/menu.svg"
+
+        onClicked:
+            rootMenu.settingsRequested()
     }
 
 	Text

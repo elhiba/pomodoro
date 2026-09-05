@@ -26,6 +26,9 @@ qt_add_executable(pomodoro
 
 	src/core/PomodoroTimer.hpp
 	src/core/PomodoroTimer.cpp
+
+	src/core/AppSettings.hpp
+	src/core/AppSettings.cpp
 )
 
 # qmltyperegistrar generates #include "PomodoroTimer.hpp" for the QML_ELEMENT types,
@@ -39,6 +42,10 @@ set(POMODORO_QML_FILES
 	src/ui/Main.qml
 	src/ui/TopMenu.qml
 	src/ui/TimerDisplay.qml
+	src/ui/ModeTabs.qml
+	src/ui/SettingsPanel.qml
+	src/ui/NumberSetting.qml
+	src/ui/ToggleSetting.qml
 )
 
 foreach(qml_file IN LISTS POMODORO_QML_FILES)

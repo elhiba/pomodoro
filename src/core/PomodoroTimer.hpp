@@ -31,6 +31,9 @@ class PomodoroTimer : public QObject
 	Q_PROPERTY(int longBreakMinutes READ longBreakMinutes WRITE setLongBreakMinutes NOTIFY longBreakMinutesChanged)
 	Q_PROPERTY(int roundsBeforeLongBreak READ roundsBeforeLongBreak WRITE setRoundsBeforeLongBreak NOTIFY roundsBeforeLongBreakChanged)
 
+	Q_PROPERTY(bool autoStartBreaks READ autoStartBreaks WRITE setAutoStartBreaks NOTIFY autoStartBreaksChanged)
+	Q_PROPERTY(bool autoStartFocus READ autoStartFocus WRITE setAutoStartFocus NOTIFY autoStartFocusChanged)
+
 	public:
 		enum Mode
 		{
@@ -63,11 +66,15 @@ class PomodoroTimer : public QObject
 		int		shortBreakMinutes() const;
 		int		longBreakMinutes() const;
 		int		roundsBeforeLongBreak() const;
+		bool	autoStartBreaks() const;
+		bool	autoStartFocus() const;
 
 		void	setFocusMinutes(int minutes);
 		void	setShortBreakMinutes(int minutes);
 		void	setLongBreakMinutes(int minutes);
 		void	setRoundsBeforeLongBreak(int rounds);
+		void	setAutoStartBreaks(bool autoStart);
+		void	setAutoStartFocus(bool autoStart);
 
 	public slots:
 		void	start();
@@ -90,6 +97,8 @@ class PomodoroTimer : public QObject
 		void	shortBreakMinutesChanged();
 		void	longBreakMinutesChanged();
 		void	roundsBeforeLongBreakChanged();
+		void	autoStartBreaksChanged();
+		void	autoStartFocusChanged();
 
 		// Emitted the moment a session runs out. Phase 3 hangs the alarm off this,
 		// phase 4 the task counter and phase 5 the session log.
@@ -111,6 +120,9 @@ class PomodoroTimer : public QObject
 		int		_shortBreakMinutes = 5;
 		int		_longBreakMinutes = 15;
 		int		_roundsBeforeLongBreak = 4;
+
+		bool	_autoStartBreaks = false;
+		bool	_autoStartFocus = false;
 
 		int		_completedRounds = 0;
 

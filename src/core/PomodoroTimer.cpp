@@ -74,6 +74,34 @@ int	PomodoroTimer::roundsBeforeLongBreak() const
 	return _roundsBeforeLongBreak;
 }
 
+bool	PomodoroTimer::autoStartBreaks() const
+{
+	return _autoStartBreaks;
+}
+
+bool	PomodoroTimer::autoStartFocus() const
+{
+	return _autoStartFocus;
+}
+
+void	PomodoroTimer::setAutoStartBreaks(bool autoStart)
+{
+	if (_autoStartBreaks == autoStart)
+		return;
+
+	_autoStartBreaks = autoStart;
+	emit autoStartBreaksChanged();
+}
+
+void	PomodoroTimer::setAutoStartFocus(bool autoStart)
+{
+	if (_autoStartFocus == autoStart)
+		return;
+
+	_autoStartFocus = autoStart;
+	emit autoStartFocusChanged();
+}
+
 void	PomodoroTimer::setFocusMinutes(int minutes)
 {
 	minutes = qMax(1, minutes);
@@ -292,5 +320,12 @@ void	PomodoroTimer::finishSession()
 
 	setMode(next);
 
+	// Announced before anything auto starts, so a listener sees the finished session
+	// settled at the top of the next one rather than already counting down.
 	emit sessionFinished(finished, next);
+
+	bool	autoStart = (next == Focus) ? _autoStartFocus : _autoStartBreaks;
+
+	if (autoStart)
+		start();
 }
