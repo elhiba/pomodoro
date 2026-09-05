@@ -1,25 +1,86 @@
-cmake_minimum_required(VERSION 3.16)
+cmake_minimum_required(VERSION 3.21)
+
 project(pomodoro
 	VERSION 1.0.0
 	LANGUAGES CXX
 )
 
 set(CMAKE_CXX_STANDARD 17)
-
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Qml Quick)
+find_package(Qt6 6.5 REQUIRED COMPONENTS
+	Core
+	Gui
+	Qml
+	Quick
+	QuickControls2
+	Multimedia
+	Svg
+)
 
-add_executable(pomodoro
-    src/main.cpp
-    src/ui/resources.qrc
+qt_standard_project_setup(REQUIRES 6.5)
+
+qt_add_executable(pomodoro
+	src/main.cpp
+)
+
+# The QML sources live under src/ui/, but a QML type name is taken from the file's
+# path inside the module. Alias each one to the module root so that they register
+# as Main, TopMenu and TimerDisplay rather than src/ui/Main and friends.
+set(POMODORO_QML_FILES
+	src/ui/Main.qml
+	src/ui/TopMenu.qml
+	src/ui/TimerDisplay.qml
+)
+
+foreach(qml_file IN LISTS POMODORO_QML_FILES)
+	cmake_path(GET qml_file FILENAME qml_name)
+	set_source_files_properties(${qml_file} PROPERTIES QT_RESOURCE_ALIAS ${qml_name})
+endforeach()
+
+# Against a shared Qt build (the system Qt here) the QML import scan cannot link
+# anything -- the plugin targets such as Qt6::qtquick2plugin only exist in a static
+# build -- so it just emits a warning per plugin. Skip it, but keep it enabled if
+# this is ever built against a static Qt, where the scan is what links the plugins in.
+get_target_property(POMODORO_QT_CORE_TYPE Qt6::Core TYPE)
+
+if(POMODORO_QT_CORE_TYPE STREQUAL "SHARED_LIBRARY")
+	set(POMODORO_IMPORT_SCAN NO_IMPORT_SCAN)
+else()
+	set(POMODORO_IMPORT_SCAN "")
+endif()
+
+qt_add_qml_module(pomodoro
+	URI Pomodoro
+	VERSION 1.0
+	${POMODORO_IMPORT_SCAN}
+	QML_FILES ${POMODORO_QML_FILES}
+	RESOURCES
+		assets/fonts/PlaywriteAR.ttf
+		assets/fonts/JetBrainsMono.ttf
+
+		assets/icons/close.svg
+		assets/icons/minimize.svg
+		assets/icons/maximize.svg
+		assets/icons/maximizeReverse.svg
+		assets/icons/menu.svg
+		assets/icons/playTimer.svg
+		assets/icons/pauseTimer.svg
+		assets/icons/restartTimer.svg
+		assets/icons/pomodoroLogo.png
+		assets/icons/pomodoroLogoTransport.png
+
+		assets/sounds/alarmWood.wav
+		assets/sounds/button.wav
 )
 
 target_link_libraries(pomodoro PRIVATE
-    Qt6::Core
-    Qt6::Gui
-    Qt6::Qml
-    Qt6::Quick
+	Qt6::Core
+	Qt6::Gui
+	Qt6::Qml
+	Qt6::Quick
+	Qt6::QuickControls2
+	Qt6::Multimedia
+	Qt6::Svg
 )

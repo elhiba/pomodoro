@@ -3,12 +3,24 @@
 
 int main(int ac, char **av)
 {
-	QGuiApplication pomodoro(ac, av);
-	QQmlApplicationEngine engine;
+	QGuiApplication	pomodoro(ac, av);
 
-	const QUrl url(QStringLiteral("qrc:/main.qml"));
+	// Set before anything touches QSettings: these decide where the
+	// configuration file lands (~/.config/elhiba/pomodoro.conf).
+	QGuiApplication::setOrganizationName("elhiba");
+	QGuiApplication::setApplicationName("pomodoro");
+	QGuiApplication::setApplicationVersion("1.0.0");
+	QGuiApplication::setDesktopFileName("pomodoro");
 
-	engine.load(url);
+	QQmlApplicationEngine	engine;
 
-    return pomodoro.exec();
+	QObject::connect(
+		&engine, &QQmlApplicationEngine::objectCreationFailed,
+		&pomodoro, []() { QCoreApplication::exit(EXIT_FAILURE); },
+		Qt::QueuedConnection
+	);
+
+	engine.loadFromModule("Pomodoro", "Main");
+
+	return pomodoro.exec();
 }
