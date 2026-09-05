@@ -12,8 +12,19 @@ namespace
 
 	const char *const	KeyAlarmVolume = "sound/alarmVolume";
 
+	const char *const	KeyStreamUrl = "music/streamUrl";
+	const char *const	KeyMusicVolume = "music/volume";
+	const char *const	KeyMusicFollowsFocus = "music/followsFocus";
+
 	const char *const	KeyAlwaysOnTop = "window/alwaysOnTop";
-	const char *const	KeyMinimizeToTray = "window/minimizeToTray";
+	const char *const	KeyCloseMinimizes = "window/closeMinimizes";
+}
+
+const QString	&AppSettings::defaultStreamUrl()
+{
+	static const QString	url = QStringLiteral("https://stream.zeno.fm/f3wvbbqmdg8uv");
+
+	return url;
 }
 
 AppSettings::AppSettings(QObject *parent)
@@ -64,14 +75,29 @@ qreal	AppSettings::alarmVolume() const
 	return _alarmVolume;
 }
 
+QString	AppSettings::streamUrl() const
+{
+	return _streamUrl;
+}
+
+qreal	AppSettings::musicVolume() const
+{
+	return _musicVolume;
+}
+
+bool	AppSettings::musicFollowsFocus() const
+{
+	return _musicFollowsFocus;
+}
+
 bool	AppSettings::alwaysOnTop() const
 {
 	return _alwaysOnTop;
 }
 
-bool	AppSettings::minimizeToTray() const
+bool	AppSettings::closeMinimizes() const
 {
-	return _minimizeToTray;
+	return _closeMinimizes;
 }
 
 int	AppSettings::minimumMinutes() const
@@ -181,6 +207,43 @@ void	AppSettings::setAlarmVolume(qreal volume)
 	emit alarmVolumeChanged();
 }
 
+void	AppSettings::setStreamUrl(const QString &url)
+{
+	QString	trimmed = url.trimmed();
+
+	if (_streamUrl == trimmed)
+		return;
+
+	_streamUrl = trimmed;
+	store(KeyStreamUrl, trimmed);
+
+	emit streamUrlChanged();
+}
+
+void	AppSettings::setMusicVolume(qreal volume)
+{
+	volume = qBound(0.0, volume, 1.0);
+
+	if (qFuzzyCompare(_musicVolume, volume))
+		return;
+
+	_musicVolume = volume;
+	store(KeyMusicVolume, volume);
+
+	emit musicVolumeChanged();
+}
+
+void	AppSettings::setMusicFollowsFocus(bool follows)
+{
+	if (_musicFollowsFocus == follows)
+		return;
+
+	_musicFollowsFocus = follows;
+	store(KeyMusicFollowsFocus, follows);
+
+	emit musicFollowsFocusChanged();
+}
+
 void	AppSettings::setAlwaysOnTop(bool onTop)
 {
 	if (_alwaysOnTop == onTop)
@@ -192,15 +255,15 @@ void	AppSettings::setAlwaysOnTop(bool onTop)
 	emit alwaysOnTopChanged();
 }
 
-void	AppSettings::setMinimizeToTray(bool toTray)
+void	AppSettings::setCloseMinimizes(bool minimizes)
 {
-	if (_minimizeToTray == toTray)
+	if (_closeMinimizes == minimizes)
 		return;
 
-	_minimizeToTray = toTray;
-	store(KeyMinimizeToTray, toTray);
+	_closeMinimizes = minimizes;
+	store(KeyCloseMinimizes, minimizes);
 
-	emit minimizeToTrayChanged();
+	emit closeMinimizesChanged();
 }
 
 void	AppSettings::restoreDefaults()
@@ -212,8 +275,11 @@ void	AppSettings::restoreDefaults()
 	setAutoStartBreaks(DefaultAutoStartBreaks);
 	setAutoStartFocus(DefaultAutoStartFocus);
 	setAlarmVolume(DefaultAlarmVolume);
+	setStreamUrl(defaultStreamUrl());
+	setMusicVolume(DefaultMusicVolume);
+	setMusicFollowsFocus(DefaultMusicFollowsFocus);
 	setAlwaysOnTop(DefaultAlwaysOnTop);
-	setMinimizeToTray(DefaultMinimizeToTray);
+	setCloseMinimizes(DefaultCloseMinimizes);
 }
 
 void	AppSettings::load()
@@ -237,8 +303,12 @@ void	AppSettings::load()
 
 	_alarmVolume = qBound(0.0, _store.value(KeyAlarmVolume, DefaultAlarmVolume).toDouble(), 1.0);
 
+	_streamUrl = _store.value(KeyStreamUrl, defaultStreamUrl()).toString().trimmed();
+	_musicVolume = qBound(0.0, _store.value(KeyMusicVolume, DefaultMusicVolume).toDouble(), 1.0);
+	_musicFollowsFocus = _store.value(KeyMusicFollowsFocus, DefaultMusicFollowsFocus).toBool();
+
 	_alwaysOnTop = _store.value(KeyAlwaysOnTop, DefaultAlwaysOnTop).toBool();
-	_minimizeToTray = _store.value(KeyMinimizeToTray, DefaultMinimizeToTray).toBool();
+	_closeMinimizes = _store.value(KeyCloseMinimizes, DefaultCloseMinimizes).toBool();
 }
 
 void	AppSettings::store(const char *key, const QVariant &value)

@@ -8,10 +8,10 @@ Rectangle
     height: 40
 
 	property color themeColor: "#12130F"
-	property real progress: 1.0
 
 	signal settingsRequested()
 	signal statsRequested()
+	signal musicToggled()
 
     color: rootMenu.themeColor
 
@@ -63,40 +63,84 @@ Rectangle
 
         // Drawn rather than loaded: there is no chart icon in assets, and a wrong
         // icon reads worse than three bars.
-        contentItem: Row
+        //
+        // The Row goes inside an Item so it can be centred. A Row used directly as a
+        // contentItem gets stretched to the whole content rect and lays its children
+        // out from its own left edge, which left the bars hard against the left side.
+        contentItem: Item
         {
-            spacing: 3
-
-            Rectangle
+            Row
             {
-                width: 3
-                height: 8
-                y: (statsBtn.height - 16) / 2 + 8
-                color: "#e3e3e3"
-                radius: 1
-            }
+                anchors.centerIn: parent
 
-            Rectangle
-            {
-                width: 3
-                height: 16
-                y: (statsBtn.height - 16) / 2
-                color: "#e3e3e3"
-                radius: 1
-            }
+                spacing: 3
 
-            Rectangle
-            {
-                width: 3
-                height: 12
-                y: (statsBtn.height - 16) / 2 + 4
-                color: "#e3e3e3"
-                radius: 1
+                // Anchored to a shared baseline rather than positioned by hand, so the
+                // bars line up at the bottom whatever their heights are.
+                Rectangle
+                {
+                    width: 3
+                    height: 8
+                    radius: 1
+                    color: "#e3e3e3"
+                    anchors.bottom: parent.bottom
+                }
+
+                Rectangle
+                {
+                    width: 3
+                    height: 16
+                    radius: 1
+                    color: "#e3e3e3"
+                    anchors.bottom: parent.bottom
+                }
+
+                Rectangle
+                {
+                    width: 3
+                    height: 12
+                    radius: 1
+                    color: "#e3e3e3"
+                    anchors.bottom: parent.bottom
+                }
             }
         }
 
         onClicked:
             rootMenu.statsRequested()
+    }
+
+	Button
+	{
+		id: musicBtn
+
+        width: 40
+        height: 40
+
+        anchors.left: statsBtn.right
+
+        background: Rectangle
+        {
+            color: musicBtn.hovered ? "#929494" : "transparent"
+        }
+
+        icon.source: MusicPlayer.active
+            ? "assets/icons/pauseTimer.svg"
+            : "assets/icons/playTimer.svg"
+
+        // Red while the stream is refusing to start, and faded while it is still trying,
+        // so a dead URL is visible without opening the settings.
+        icon.color: MusicPlayer.failed ? "#ff8a8a" : "#e3e3e3"
+
+        opacity: MusicPlayer.status === MusicPlayer.Connecting ? 0.55 : 1.0
+
+        Behavior on opacity
+        {
+            NumberAnimation { duration: 200 }
+        }
+
+        onClicked:
+            MusicPlayer.toggle()
     }
 
 	Text
@@ -166,37 +210,10 @@ Rectangle
             
             icon.source: "assets/icons/close.svg"
 
+			// close() rather than Qt.quit(): it runs the window's closing handler, which
+			// is where anything still buffered gets a chance to reach disk.
 			onClicked:
-				Qt.quit() 
-        }
-    }
-
-	Rectangle
-	{
-        id: progressTrack
-        height: 8
-        radius: 4
-        
-        width: parent.width * 0.95
-        anchors.horizontalCenter: parent.horizontalCenter
-        
-        anchors.top: parent.bottom
-        anchors.topMargin: 40
-        
-        color: Qt.rgba(1, 1, 1, 0.15) 
-
-        Rectangle {
-            height: parent.height
-            radius: parent.radius
-            color: "white" 
-            opacity: 0.9 
-            
-            width: parent.width * rootMenu.progress
-
-            Behavior on width
-            {
-                NumberAnimation { duration: 250; easing.type: Easing.Linear }
-            }
+				Window.window.close() 
         }
     }
 }

@@ -13,6 +13,14 @@ Item
 	property bool open: false
 	property color themeColor: "#12130F"
 
+	// Single letter shortcuts have to stand down while a URL is being typed.
+	readonly property bool typing: streamField.activeFocus
+
+	// Leaving the drawer armed would make the next visit one careless click from quitting.
+	onOpenChanged:
+		if (!rootPanel.open)
+			quitBtn.armed = false
+
 	Rectangle
 	{
 		id: scrim
@@ -256,6 +264,206 @@ Item
 
 					onValueModified: (newValue) => AppSettings.alarmVolume = newValue
 					onPreviewRequested: SoundPlayer.playAlarm()
+				}
+
+				Rectangle
+				{
+					width: parent.width
+					height: 1
+					color: Qt.rgba(1, 1, 1, 0.15)
+				}
+
+				Text
+				{
+					text: "MUSIC"
+					color: Qt.rgba(1, 1, 1, 0.6)
+					font.pixelSize: 11
+					font.bold: true
+					font.letterSpacing: 1.2
+					topPadding: 14
+					bottomPadding: 6
+				}
+
+				TextField
+				{
+					id: streamField
+
+					width: parent.width
+					height: 38
+
+					text: AppSettings.streamUrl
+					placeholderText: "Stream URL"
+					placeholderTextColor: Qt.rgba(1, 1, 1, 0.45)
+					color: "white"
+					font.pixelSize: 13
+					clip: true
+
+					background: Rectangle
+					{
+						radius: 8
+						color: Qt.rgba(0, 0, 0, 0.2)
+						border.color: streamField.activeFocus ? Qt.rgba(1, 1, 1, 0.5) : Qt.rgba(1, 1, 1, 0.22)
+						border.width: 1
+
+						Behavior on border.color
+						{
+							ColorAnimation { duration: 150 }
+						}
+					}
+
+					// Committed on Enter or on losing focus, not per keystroke: a URL is
+					// invalid most of the way through being typed.
+					onAccepted:
+						AppSettings.streamUrl = streamField.text
+
+					onActiveFocusChanged:
+						if (!streamField.activeFocus)
+							AppSettings.streamUrl = streamField.text
+				}
+
+				Text
+				{
+					width: parent.width
+					topPadding: 4
+					bottomPadding: 4
+
+					text: MusicPlayer.statusText
+					color: MusicPlayer.failed ? "#ff8a8a" : Qt.rgba(1, 1, 1, 0.6)
+					font.pixelSize: 12
+					wrapMode: Text.WordWrap
+				}
+
+				SliderSetting
+				{
+					label: "Music volume"
+					value: AppSettings.musicVolume
+
+					onValueModified: (newValue) => AppSettings.musicVolume = newValue
+				}
+
+				ToggleSetting
+				{
+					label: "Play only during focus"
+					checked: AppSettings.musicFollowsFocus
+					accentColor: rootPanel.themeColor
+
+					onToggleRequested: (wanted) => AppSettings.musicFollowsFocus = wanted
+				}
+
+				Rectangle
+				{
+					width: parent.width
+					height: 1
+					color: Qt.rgba(1, 1, 1, 0.15)
+				}
+
+				Text
+				{
+					text: "WINDOW"
+					color: Qt.rgba(1, 1, 1, 0.6)
+					font.pixelSize: 11
+					font.bold: true
+					font.letterSpacing: 1.2
+					topPadding: 14
+					bottomPadding: 6
+				}
+
+				ToggleSetting
+				{
+					label: "Close button hides to the tray"
+					checked: AppSettings.closeMinimizes
+					accentColor: rootPanel.themeColor
+
+					onToggleRequested: (wanted) => AppSettings.closeMinimizes = wanted
+				}
+
+				Text
+				{
+					width: parent.width
+					bottomPadding: 6
+
+					text:
+					{
+						if (!AppSettings.closeMinimizes)
+							return "Closing quits pomodoro and ends the current session."
+
+						if (TrayIcon.available)
+							return "Closing puts pomodoro in the system tray with the timer still running. Click the tray icon to bring it back, or use its menu."
+
+						// Said plainly rather than hidden, because the fallback behaves
+						// differently from what the switch above describes.
+						return "This desktop has no system tray, so closing will minimise the window instead. On GNOME a tray needs the AppIndicator extension."
+					}
+
+					color: TrayIcon.available || !AppSettings.closeMinimizes
+						? Qt.rgba(1, 1, 1, 0.5)
+						: "#ffcf8a"
+
+					font.pixelSize: 11
+					wrapMode: Text.WordWrap
+				}
+
+				Item
+				{
+					width: 1
+					height: 16
+				}
+
+				Button
+				{
+					id: quitBtn
+
+					property bool armed: false
+
+					width: parent.width
+					height: 40
+
+					background: Rectangle
+					{
+						radius: 8
+						color: quitBtn.armed
+							? "#d91629"
+							: quitBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(1, 1, 1, 0.1)
+
+						border.color: Qt.rgba(1, 1, 1, 0.25)
+						border.width: 1
+
+						Behavior on color
+						{
+							ColorAnimation { duration: 150 }
+						}
+					}
+
+					contentItem: Text
+					{
+						text: quitBtn.armed ? "Really quit?" : "Quit pomodoro"
+						color: "white"
+						font.pixelSize: 14
+
+						horizontalAlignment: Text.AlignHCenter
+						verticalAlignment: Text.AlignVCenter
+					}
+
+					// Two step, because quitting mid session throws that session away.
+					onClicked:
+					{
+						if (quitBtn.armed)
+							Qt.quit()
+						else
+						{
+							quitBtn.armed = true
+							disarmQuit.restart()
+						}
+					}
+
+					Timer
+					{
+						id: disarmQuit
+						interval: 4000
+
+						onTriggered:
+							quitBtn.armed = false
+					}
 				}
 
 				Item

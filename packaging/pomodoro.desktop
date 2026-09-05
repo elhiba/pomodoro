@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Version=1.1
+Name=Pomodoro
+GenericName=Focus Timer
+Comment=A focus timer with session statistics and a lo-fi stream
+Exec=pomodoro
+Icon=pomodoro
+Terminal=false
+Categories=Utility;
+Keywords=pomodoro;timer;focus;productivity;
+StartupNotify=true

@@ -49,6 +49,13 @@ Item
 		id: slider
 
 		width: 120
+
+		// Slider takes its implicit height from the background and the handle. Both are
+		// replaced below with plain Rectangles, whose implicit size is zero, so without
+		// an explicit height the control ends up 120x0: it still draws, because nothing
+		// clips it, but it has no hit area and cannot be dragged at all.
+		height: 28
+
 		anchors.right: readout.left
 		anchors.rightMargin: 10
 		anchors.verticalCenter: parent.verticalCenter
@@ -60,6 +67,9 @@ Item
 		{
 			x: slider.leftPadding
 			y: slider.topPadding + slider.availableHeight / 2 - height / 2
+
+			implicitWidth: 120
+			implicitHeight: 5
 
 			width: slider.availableWidth
 			height: 5
@@ -82,6 +92,9 @@ Item
 		{
 			x: slider.leftPadding + slider.visualPosition * (slider.availableWidth - width)
 			y: slider.topPadding + slider.availableHeight / 2 - height / 2
+
+			implicitWidth: 18
+			implicitHeight: 18
 
 			width: 18
 			height: 18

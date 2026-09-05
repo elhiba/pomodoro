@@ -29,8 +29,12 @@ class AppSettings : public QObject
 	Q_PROPERTY(bool autoStartFocus READ autoStartFocus WRITE setAutoStartFocus NOTIFY autoStartFocusChanged)
 
 	Q_PROPERTY(qreal alarmVolume READ alarmVolume WRITE setAlarmVolume NOTIFY alarmVolumeChanged)
+
+	Q_PROPERTY(QString streamUrl READ streamUrl WRITE setStreamUrl NOTIFY streamUrlChanged)
+	Q_PROPERTY(qreal musicVolume READ musicVolume WRITE setMusicVolume NOTIFY musicVolumeChanged)
+	Q_PROPERTY(bool musicFollowsFocus READ musicFollowsFocus WRITE setMusicFollowsFocus NOTIFY musicFollowsFocusChanged)
 	Q_PROPERTY(bool alwaysOnTop READ alwaysOnTop WRITE setAlwaysOnTop NOTIFY alwaysOnTopChanged)
-	Q_PROPERTY(bool minimizeToTray READ minimizeToTray WRITE setMinimizeToTray NOTIFY minimizeToTrayChanged)
+	Q_PROPERTY(bool closeMinimizes READ closeMinimizes WRITE setCloseMinimizes NOTIFY closeMinimizesChanged)
 
 	// Handy for the settings panel, so the bounds live in one place instead of
 	// being repeated in QML.
@@ -47,13 +51,21 @@ class AppSettings : public QObject
 		static constexpr bool	DefaultAutoStartBreaks = false;
 		static constexpr bool	DefaultAutoStartFocus = false;
 		static constexpr qreal	DefaultAlarmVolume = 0.7;
+		static constexpr qreal	DefaultMusicVolume = 0.5;
+		static constexpr bool	DefaultMusicFollowsFocus = false;
 		static constexpr bool	DefaultAlwaysOnTop = false;
-		static constexpr bool	DefaultMinimizeToTray = false;
+		// On by default: the timer is meant to be left running, and pressing close out of
+		// habit should not throw away a session.
+		static constexpr bool	DefaultCloseMinimizes = true;
 
 		static constexpr int	MinimumMinutes = 1;
 		static constexpr int	MaximumMinutes = 120;
 		static constexpr int	MinimumRounds = 1;
 		static constexpr int	MaximumRounds = 12;
+
+		// The owner's own lo-fi stream, carried over from the settings menu they wrote
+		// before the QML rewrite.
+		static const QString	&defaultStreamUrl();
 
 		explicit AppSettings(QObject *parent = nullptr);
 		~AppSettings() override;
@@ -65,8 +77,11 @@ class AppSettings : public QObject
 		bool	autoStartBreaks() const;
 		bool	autoStartFocus() const;
 		qreal	alarmVolume() const;
+		QString	streamUrl() const;
+		qreal	musicVolume() const;
+		bool	musicFollowsFocus() const;
 		bool	alwaysOnTop() const;
-		bool	minimizeToTray() const;
+		bool	closeMinimizes() const;
 
 		int		minimumMinutes() const;
 		int		maximumMinutes() const;
@@ -80,8 +95,11 @@ class AppSettings : public QObject
 		void	setAutoStartBreaks(bool autoStart);
 		void	setAutoStartFocus(bool autoStart);
 		void	setAlarmVolume(qreal volume);
+		void	setStreamUrl(const QString &url);
+		void	setMusicVolume(qreal volume);
+		void	setMusicFollowsFocus(bool follows);
 		void	setAlwaysOnTop(bool onTop);
-		void	setMinimizeToTray(bool toTray);
+		void	setCloseMinimizes(bool minimizes);
 
 	public slots:
 		void	restoreDefaults();
@@ -94,8 +112,11 @@ class AppSettings : public QObject
 		void	autoStartBreaksChanged();
 		void	autoStartFocusChanged();
 		void	alarmVolumeChanged();
+		void	streamUrlChanged();
+		void	musicVolumeChanged();
+		void	musicFollowsFocusChanged();
 		void	alwaysOnTopChanged();
-		void	minimizeToTrayChanged();
+		void	closeMinimizesChanged();
 
 	private:
 		QSettings	_store;
@@ -107,8 +128,12 @@ class AppSettings : public QObject
 		bool	_autoStartBreaks = DefaultAutoStartBreaks;
 		bool	_autoStartFocus = DefaultAutoStartFocus;
 		qreal	_alarmVolume = DefaultAlarmVolume;
+
+		QString	_streamUrl;
+		qreal	_musicVolume = DefaultMusicVolume;
+		bool	_musicFollowsFocus = DefaultMusicFollowsFocus;
 		bool	_alwaysOnTop = DefaultAlwaysOnTop;
-		bool	_minimizeToTray = DefaultMinimizeToTray;
+		bool	_closeMinimizes = DefaultCloseMinimizes;
 
 		void	load();
 		void	store(const char *key, const QVariant &value);

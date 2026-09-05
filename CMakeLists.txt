@@ -17,6 +17,8 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
 	QuickControls2
 	Multimedia
 	Svg
+	DBus
+	Widgets
 )
 
 qt_standard_project_setup(REQUIRES 6.5)
@@ -35,6 +37,18 @@ qt_add_executable(pomodoro
 
 	src/core/SessionLog.hpp
 	src/core/SessionLog.cpp
+
+	src/core/MusicPlayer.hpp
+	src/core/MusicPlayer.cpp
+
+	src/core/Notifier.hpp
+	src/core/Notifier.cpp
+
+	src/core/InstanceBridge.hpp
+	src/core/InstanceBridge.cpp
+
+	src/core/TrayIcon.hpp
+	src/core/TrayIcon.cpp
 )
 
 # qmltyperegistrar generates #include "PomodoroTimer.hpp" for the QML_ELEMENT types,
@@ -54,6 +68,7 @@ set(POMODORO_QML_FILES
 	src/ui/ToggleSetting.qml
 	src/ui/SliderSetting.qml
 	src/ui/StatsPanel.qml
+	src/ui/ResizeHandles.qml
 )
 
 foreach(qml_file IN LISTS POMODORO_QML_FILES)
@@ -105,4 +120,23 @@ target_link_libraries(pomodoro PRIVATE
 	Qt6::QuickControls2
 	Qt6::Multimedia
 	Qt6::Svg
+	Qt6::DBus
+	Qt6::Widgets
+)
+
+# The desktop entry has to be named after setDesktopFileName("pomodoro") in main.cpp,
+# which is also what tells the notification daemon which icon to show.
+include(GNUInstallDirs)
+
+install(TARGETS pomodoro
+	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(FILES packaging/pomodoro.desktop
+	DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/applications
+)
+
+install(FILES assets/icons/pomodoroLogoTransport.png
+	DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/500x500/apps
+	RENAME pomodoro.png
 )

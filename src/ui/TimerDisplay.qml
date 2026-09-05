@@ -31,7 +31,11 @@ Item
 		Column
 		{
 			anchors.centerIn: parent
-			spacing: 30
+
+			// Was a flat 30. Scaled with the panel so a small window keeps its
+			// breathing room around the button instead of spending it all on the gap.
+			// At the default panel height this still works out at 30.
+			spacing: Math.max(16, glassPanel.height * 0.111)
 
 			Text
 			{
@@ -39,7 +43,11 @@ Item
 				text: rootTimer.timer.displayTime
 				color: "white"
 				font.family: timerFont.name
-				font.pixelSize: glassPanel.width * 0.2
+				// Sized from whichever is the real constraint: the panel's width, or the
+				// width its height would allow at 16:9. Using the width alone made the
+				// digits too tall for a short, wide panel, and the column below them
+				// pushed the start button out through the bottom edge.
+				font.pixelSize: Math.min(glassPanel.width, glassPanel.height / 0.5625) * 0.2
 
 				horizontalAlignment: Text.AlignHCenter
 				anchors.horizontalCenter: parent.horizontalCenter
