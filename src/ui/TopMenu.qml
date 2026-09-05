@@ -6,7 +6,11 @@ Rectangle
 	id: rootMenu
     width: parent.width
     height: 40
-    color: themeColor
+
+	property color themeColor: "#12130F"
+	property real progress: 1.0
+
+    color: rootMenu.themeColor
 
 	Behavior on color
 	{ 
@@ -58,7 +62,7 @@ Rectangle
             width: 40
             height: 40
 
-            background: Rectangle { color: parent.hovered ? "#929494" : "transparent" }
+            background: Rectangle { color: minBtn.hovered ? "#929494" : "transparent" }
             
             icon.source: "assets/icons/minimize.svg"
             
@@ -72,7 +76,7 @@ Rectangle
             width: 40
             height: 40
 
-            background: Rectangle { color: parent.hovered ? "#929494" : "transparent" }
+            background: Rectangle { color: resizeBtn.hovered ? "#929494" : "transparent" }
             
             icon.source: Window.window.visibility === Window.Maximized ? "assets/icons/maximizeReverse.svg" : "assets/icons/maximize.svg"
             
@@ -89,7 +93,7 @@ Rectangle
             width: 40
             height: 40
             
-			background: Rectangle { color: parent.hovered ? "#d91629" : "transparent" }
+			background: Rectangle { color: closeBtn.hovered ? "#d91629" : "transparent" }
             
             icon.source: "assets/icons/close.svg"
 
@@ -118,7 +122,12 @@ Rectangle
             color: "white" 
             opacity: 0.9 
             
-            width: parent.width * mainWindow.timerProgress
+            width: parent.width * rootMenu.progress
+
+            Behavior on width
+            {
+                NumberAnimation { duration: 250; easing.type: Easing.Linear }
+            }
         }
     }
 }

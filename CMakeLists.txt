@@ -23,7 +23,14 @@ qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_executable(pomodoro
 	src/main.cpp
+
+	src/core/PomodoroTimer.hpp
+	src/core/PomodoroTimer.cpp
 )
+
+# qmltyperegistrar generates #include "PomodoroTimer.hpp" for the QML_ELEMENT types,
+# so src/core has to be on the include path.
+target_include_directories(pomodoro PRIVATE src/core)
 
 # The QML sources live under src/ui/, but a QML type name is taken from the file's
 # path inside the module. Alias each one to the module root so that they register

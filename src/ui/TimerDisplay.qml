@@ -1,13 +1,15 @@
 import QtQuick
 import QtQuick.Controls
-import QtQuick.Effects
+
+import Pomodoro
 
 Item
 {
     id: rootTimer
-	anchors.fill: parent
 
-	signal startClicked()
+	// Sized and fed from Main.qml, so this component never reaches out to the window.
+	required property PomodoroTimer timer
+	property color themeColor: "#12130F"
 
 	FontLoader
 	{
@@ -18,9 +20,7 @@ Item
 	Rectangle
 	{
 		id: glassPanel
-        width: mainWindow.width * 0.5
-        height: mainWindow.height * 0.5
-        anchors.centerIn: parent
+		anchors.fill: parent
         
         // The Glass Recipe: 15% opaque white, smooth corners, 30% opaque border
         color: Qt.rgba(1, 1, 1, 0.15)
@@ -36,7 +36,7 @@ Item
 			Text
 			{
 				id: timeText
-				text: "25:00"
+				text: rootTimer.timer.displayTime
 				color: "white"
 				font.family: timerFont.name
 				font.pixelSize: glassPanel.width * 0.2
@@ -45,77 +45,119 @@ Item
 				anchors.horizontalCenter: parent.horizontalCenter
 			}
 
-			Button
+			Row
 			{
-				id: startBtn
-				width: glassPanel.width * 0.25
-				height: glassPanel.height * 0.25
+				id: controls
+				spacing: glassPanel.width * 0.05
 
 				anchors.horizontalCenter: parent.horizontalCenter
 
-				property int depth: 6 
-
-				background: Item
+				Button
 				{
-					Rectangle
+					id: startBtn
+					width: glassPanel.width * 0.25
+					height: glassPanel.height * 0.25
+
+					property int depth: 6 
+
+					background: Item
 					{
-						anchors.fill: parent
-						anchors.topMargin: startBtn.depth 
-						color: "#e0e0e0"
-						radius: 8
-					}
+						Rectangle
+						{
+							anchors.fill: parent
+							anchors.topMargin: startBtn.depth 
+							color: "#e0e0e0"
+							radius: 8
+						}
 
-					Rectangle
-					{
-						width: parent.width
-						height: parent.height - startBtn.depth
+						Rectangle
+						{
+							width: parent.width
+							height: parent.height - startBtn.depth
 
-						color: "white"
-						radius: 8
+							color: "white"
+							radius: 8
 
-						y: startBtn.pressed ? startBtn.depth : 0
+							y: startBtn.pressed ? startBtn.depth : 0
 
-						Behavior on y {
-							NumberAnimation { duration: 80; easing.type: Easing.OutQuad }
+							Behavior on y {
+								NumberAnimation { duration: 80; easing.type: Easing.OutQuad }
+							}
 						}
 					}
-				}
 
-				contentItem: Item
-				{
-					Text
+					contentItem: Item
 					{
-						text: "START"
-						font.pixelSize: startBtn.width * 0.2
-						font.bold: true
-						color: themeColor
+						Text
+						{
+							text:
+							{
+								if (rootTimer.timer.state === PomodoroTimer.Running) return "PAUSE"
+								if (rootTimer.timer.state === PomodoroTimer.Paused) return "RESUME"
+								return "START"
+							}
 
-						anchors.horizontalCenter: parent.horizontalCenter
-						anchors.verticalCenter: parent.verticalCenter
+							font.pixelSize: startBtn.width * 0.18
+							font.bold: true
+							color: rootTimer.themeColor
 
-						anchors.verticalCenterOffset: startBtn.pressed ? startBtn.depth : 0
+							anchors.horizontalCenter: parent.horizontalCenter
+							anchors.verticalCenter: parent.verticalCenter
 
-						Behavior on anchors.verticalCenterOffset {
-							NumberAnimation { duration: 80; easing.type: Easing.OutQuad }
+							anchors.verticalCenterOffset: startBtn.pressed ? startBtn.depth : 0
+
+							Behavior on anchors.verticalCenterOffset {
+								NumberAnimation { duration: 80; easing.type: Easing.OutQuad }
+							}
 						}
 					}
+
+					onClicked:
+						rootTimer.timer.toggle()
 				}
 
-				onClicked:
+				Button
 				{
-					rootTimer.startClicked()
-					fakeTimer.start()
-				}
+					id: resetBtn
 
+					width: startBtn.height * 0.55
+					height: startBtn.height * 0.55
+
+					anchors.verticalCenter: parent.verticalCenter
+					anchors.verticalCenterOffset: -startBtn.depth / 2
+
+					// Nothing to go back to while the session is untouched.
+					enabled: rootTimer.timer.state !== PomodoroTimer.Idle
+
+					opacity: resetBtn.enabled ? 1.0 : 0.3
+
+					Behavior on opacity
+					{
+						NumberAnimation { duration: 150; easing.type: Easing.OutQuad }
+					}
+
+					background: Rectangle
+					{
+						radius: width / 2
+						color: resetBtn.hovered ? Qt.rgba(1, 1, 1, 0.28) : Qt.rgba(1, 1, 1, 0.12)
+						border.color: Qt.rgba(1, 1, 1, 0.3)
+						border.width: 1
+
+						Behavior on color
+						{
+							ColorAnimation { duration: 150 }
+						}
+					}
+
+					icon.source: "assets/icons/restartTimer.svg"
+					icon.color: "white"
+					icon.width: resetBtn.width * 0.5
+					icon.height: resetBtn.height * 0.5
+
+					onClicked:
+						rootTimer.timer.reset()
+				}
 			}
-	}
-		PropertyAnimation
-		{
-    	    id: fakeTimer
-    	    target: mainWindow
-    	    property: "timerProgress"
-    	    to: 0.0
-    	    duration: 10000 // 10 seconds
-    	}
+		}
 	}
 }

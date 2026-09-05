@@ -1,7 +1,9 @@
 import QtQuick
-import QtQuick.Controls
 
-Window {
+import Pomodoro
+
+Window
+{
 	id: mainWindow
     width: 1920 * 0.5
     height: 1080 * 0.5
@@ -10,32 +12,41 @@ Window {
 
 	flags: Qt.Window | Qt.FramelessWindowHint
 
-	property real timerProgress: 1.0
-    property string currentMode: "focus"
-
-    property color themeColor: {
-        if (currentMode === "focus") return "#ba4949"      // Soft Red
-        if (currentMode === "shortBreak") return "#38858a" // Soft Mint
-        if (currentMode === "longBreak") return "#397097"  // Soft Blue
+    property color themeColor:
+	{
+        if (pomodoroTimer.mode === PomodoroTimer.Focus) return "#ba4949"      // Soft Red
+        if (pomodoroTimer.mode === PomodoroTimer.ShortBreak) return "#38858a" // Soft Mint
+        if (pomodoroTimer.mode === PomodoroTimer.LongBreak) return "#397097"  // Soft Blue
         return "#12130F" 
     }
 
 	color: themeColor
 
-	Behavior on color { 
+	Behavior on color
+	{ 
         ColorAnimation { duration: 500; easing.type: Easing.InOutQuad } 
     }
 
-	TopMenu {}
-
-	Behavior on timerProgress
+	PomodoroTimer
 	{
-            NumberAnimation { duration: 1000; easing.type: Easing.Linear }
+		id: pomodoroTimer
 	}
+
+	TopMenu
+	{
+		themeColor: mainWindow.themeColor
+		progress: pomodoroTimer.progress
+	}
+
 	TimerDisplay
 	{
 		anchors.centerIn: parent
 
+		width: mainWindow.width * 0.5
+		height: mainWindow.height * 0.5
+
+		timer: pomodoroTimer
+		themeColor: mainWindow.themeColor
 	}
 
 }
