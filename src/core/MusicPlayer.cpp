@@ -1,20 +1,40 @@
 #include "MusicPlayer.hpp"
 
 #include <QDebug>
+#include <QMediaMetaData>
 
 MusicPlayer::MusicPlayer(QObject *parent)
 	: QObject(parent)
 {
-	_player.setAudioOutput(&_output);
-	_output.setVolume(_volume);
-
 	_watchdog.setSingleShot(true);
 	_watchdog.setInterval(WatchdogMs);
 
-	connect(&_player, &QMediaPlayer::playbackStateChanged, this, &MusicPlayer::onPlaybackStateChanged);
-	connect(&_player, &QMediaPlayer::mediaStatusChanged, this, &MusicPlayer::onMediaStatusChanged);
-	connect(&_player, &QMediaPlayer::errorOccurred, this, &MusicPlayer::onErrorOccurred);
+	_retryTimer.setSingleShot(true);
+
+	rebuildPlayer();
+
 	connect(&_watchdog, &QTimer::timeout, this, &MusicPlayer::onWatchdogTimeout);
+	connect(&_retryTimer, &QTimer::timeout, this, &MusicPlayer::onRetryTimeout);
+	connect(&_metadata, &StreamMetadata::changed, this, &MusicPlayer::onMetadataChanged);
+	connect(&_metadata, &StreamMetadata::probeSucceeded, this, &MusicPlayer::onProbeSucceeded);
+	connect(&_metadata, &StreamMetadata::probeFailed, this, &MusicPlayer::onProbeFailed);
+
+	// The reachability backend is optional. Without one the backoff timer carries the
+	// reconnects on its own; with one, the network coming back cuts the wait short.
+	if (QNetworkInformation::loadDefaultBackend())
+	{
+		connect(QNetworkInformation::instance(), &QNetworkInformation::reachabilityChanged,
+			this, &MusicPlayer::onReachabilityChanged);
+	}
+
+	// The desktop's media controls. Their requests go through the same slots the
+	// buttons use, so the OS can do nothing the UI cannot.
+	_controls = MediaControls::create(this);
+
+	connect(_controls, &MediaControls::playRequested, this, &MusicPlayer::play);
+	connect(_controls, &MediaControls::pauseRequested, this, &MusicPlayer::pause);
+	connect(_controls, &MediaControls::toggleRequested, this, &MusicPlayer::toggle);
+	connect(_controls, &MediaControls::stopRequested, this, &MusicPlayer::stop);
 }
 
 QString	MusicPlayer::source() const
@@ -42,6 +62,14 @@ QString	MusicPlayer::statusText() const
 			return QStringLiteral("Playing");
 		case Paused:
 			return QStringLiteral("Paused");
+		case Reconnecting:
+			if (networkLooksDown())
+				return QStringLiteral("Waiting for the network…");
+
+			if (_errorText.isEmpty())
+				return QStringLiteral("Reconnecting… (attempt %1)").arg(_retryAttempt);
+
+			return QStringLiteral("Reconnecting… (attempt %1) — %2").arg(_retryAttempt).arg(_errorText);
 		case Failed:
 			return _errorText.isEmpty() ? QStringLiteral("Could not play the stream") : _errorText;
 		case Idle:
@@ -52,12 +80,51 @@ QString	MusicPlayer::statusText() const
 
 bool	MusicPlayer::active() const
 {
-	return _status == Connecting || _status == Playing;
+	return _status == Connecting || _status == Playing || _status == Reconnecting;
 }
 
 bool	MusicPlayer::failed() const
 {
 	return _status == Failed;
+}
+
+bool	MusicPlayer::reconnecting() const
+{
+	return _status == Reconnecting;
+}
+
+int	MusicPlayer::retryAttempt() const
+{
+	return _retryAttempt;
+}
+
+QString	MusicPlayer::stationName() const
+{
+	if (!_metadata.stationName().isEmpty())
+		return _metadata.stationName();
+
+	return _backendStation;
+}
+
+QString	MusicPlayer::genre() const
+{
+	return _metadata.genre();
+}
+
+QString	MusicPlayer::title() const
+{
+	QString	title = _metadata.title().isEmpty() ? _backendTitle : _metadata.title();
+	QString	station = stationName();
+
+	// Many stations prefix every title with their own name, "Lofi Music - Playlist 5".
+	// The name is already shown on its own line, so it need not be said twice.
+	if (!station.isEmpty() && title.size() > station.size() + 3
+		&& title.startsWith(station + QStringLiteral(" - "), Qt::CaseInsensitive))
+	{
+		title = title.mid(station.size() + 3).trimmed();
+	}
+
+	return title;
 }
 
 void	MusicPlayer::setSource(const QString &source)
@@ -76,10 +143,11 @@ void	MusicPlayer::setSource(const QString &source)
 
 	// Deliberately NOT handed to QMediaPlayer here. The FFmpeg backend opens the URL
 	// as soon as it is set, to probe the format, which would connect to the stream on
-	// every launch before the user has asked for any music. play() sets it instead.
-	_player.setSource(QUrl());
+	// every launch before the user has asked for any music. openStream() sets it.
+	_player->setSource(QUrl());
 
 	emit sourceChanged();
+	emit statusChanged();
 
 	if (wasPlaying && !_source.isEmpty())
 		play();
@@ -93,7 +161,7 @@ void	MusicPlayer::setVolume(qreal volume)
 		return;
 
 	_volume = volume;
-	_output.setVolume(_volume);
+	_output->setVolume(_volume);
 
 	emit volumeChanged();
 }
@@ -106,26 +174,28 @@ void	MusicPlayer::play()
 		return;
 	}
 
-	if (!QUrl(_source).isValid() || QUrl(_source).scheme().isEmpty())
+	QUrl	url(_source);
+
+	if (!url.isValid() || url.scheme().isEmpty())
 	{
 		setStatus(Failed, QStringLiteral("That does not look like a URL"));
 		return;
 	}
 
-	if (_player.source() != QUrl(_source))
-		_player.setSource(QUrl(_source));
+	// Already on its way. A second press is not a restart, though a press while a
+	// retry is waiting is taken as "try now".
+	if (_wantsPlayback && !_retryPending)
+		return;
 
 	_wantsPlayback = true;
+	_retryAttempt = 0;
 
-	// A live stream has no position to resume from, so a failed attempt is retried
-	// from scratch rather than un-paused.
-	if (_status == Failed)
-		_player.setSource(QUrl(_source));
+	// A fresh start knows nothing about the server yet.
+	_probeConfirmed = false;
+	_probeFailures = 0;
 
-	setStatus(Connecting);
-	_watchdog.start();
-
-	_player.play();
+	cancelRetry();
+	openStream();
 }
 
 void	MusicPlayer::pause()
@@ -134,9 +204,16 @@ void	MusicPlayer::pause()
 		return;
 
 	_wantsPlayback = false;
-	_watchdog.stop();
 
-	_player.pause();
+	_watchdog.stop();
+	cancelRetry();
+	_metadata.stop();
+
+	// Stopped underneath rather than paused. A live stream has no position to come
+	// back to: un-pausing it later would play stale audio from the buffer and then trip
+	// over a connection the server has long since dropped. Resuming reconnects instead,
+	// so what comes back is live.
+	_player->stop();
 
 	setStatus(Paused);
 }
@@ -152,11 +229,19 @@ void	MusicPlayer::toggle()
 void	MusicPlayer::stop()
 {
 	_wantsPlayback = false;
-	_watchdog.stop();
+	_retryAttempt = 0;
 
-	_player.stop();
+	_watchdog.stop();
+	cancelRetry();
+
+	_metadata.clear();
+	_backendTitle.clear();
+	_backendStation.clear();
+
+	_player->stop();
 
 	setStatus(Idle);
+	updateNowPlaying();
 }
 
 void	MusicPlayer::onPlaybackStateChanged()
@@ -174,23 +259,95 @@ void	MusicPlayer::onErrorOccurred(QMediaPlayer::Error error, const QString &mess
 	if (error == QMediaPlayer::NoError)
 		return;
 
-	_wantsPlayback = false;
-	_watchdog.stop();
+	// An error after the user stopped asking is the tail end of that stop.
+	if (!_wantsPlayback)
+		return;
 
-	setStatus(Failed, message.isEmpty() ? QStringLiteral("The stream could not be opened") : message);
+	scheduleRetry(message.isEmpty() ? QStringLiteral("The stream could not be opened") : message);
+}
+
+// Whatever the backend itself can read off the stream. Some backends surface the ICY
+// tags here, some nothing at all; either way the ICY reader takes precedence, and this
+// only fills in when it has not spoken yet.
+void	MusicPlayer::onBackendMetaDataChanged()
+{
+	QMediaMetaData	meta = _player->metaData();
+
+	QString	title = meta.stringValue(QMediaMetaData::Title).trimmed();
+	QString	station = meta.stringValue(QMediaMetaData::Publisher).trimmed();
+
+	if (station.isEmpty())
+		station = meta.stringValue(QMediaMetaData::AlbumTitle).trimmed();
+
+	if (title == _backendTitle && station == _backendStation)
+		return;
+
+	_backendTitle = title;
+	_backendStation = station;
+
+	updateNowPlaying();
 }
 
 void	MusicPlayer::onWatchdogTimeout()
 {
-	if (_status != Connecting)
+	if (_status != Connecting && _status != Reconnecting)
 		return;
 
 	// Nothing arrived and nothing errored. Rather than sit on "Connecting…" forever,
-	// give up and say so.
-	_wantsPlayback = false;
-	_player.stop();
+	// drop the attempt and make another.
+	scheduleRetry(QStringLiteral("The stream did not start in time"));
+}
 
-	setStatus(Failed, QStringLiteral("The stream did not start in time"));
+void	MusicPlayer::onRetryTimeout()
+{
+	if (!_wantsPlayback)
+		return;
+
+	_retryPending = false;
+	openStream();
+}
+
+// The probe reached the server, so the stream is genuinely there. That both clears any
+// run of failures and records that the server allows the second connection, which is
+// what lets a later failure be trusted.
+void	MusicPlayer::onProbeSucceeded()
+{
+	_probeConfirmed = true;
+	_probeFailures = 0;
+}
+
+// The probe could not reach the server. While the player still claims to be playing,
+// this is the only honest sign the stream has dropped. It is acted on only once the
+// server has proven it tolerates the probe, and only after a couple in a row, so one
+// unlucky request does not tear down a stream that is playing fine.
+void	MusicPlayer::onProbeFailed()
+{
+	if (!_wantsPlayback || _status != Playing)
+		return;
+
+	if (!_probeConfirmed)
+		return;
+
+	if (++_probeFailures < ProbeFailuresForDrop)
+		return;
+
+	scheduleRetry(QStringLiteral("The stream stopped responding"));
+}
+
+void	MusicPlayer::onReachabilityChanged(QNetworkInformation::Reachability reachability)
+{
+	// The network is back: no point sitting out the rest of a thirty second wait.
+	if (_retryPending && reachability == QNetworkInformation::Reachability::Online)
+		_retryTimer.start(NetworkBackRetryMs);
+
+	// The status text talks about the network while it is down, so it needs re-reading.
+	if (_status == Reconnecting)
+		emit statusChanged();
+}
+
+void	MusicPlayer::onMetadataChanged()
+{
+	updateNowPlaying();
 }
 
 void	MusicPlayer::setStatus(Status status, const QString &errorText)
@@ -202,57 +359,223 @@ void	MusicPlayer::setStatus(Status status, const QString &errorText)
 	_errorText = errorText;
 
 	emit statusChanged();
+
+	updateControls();
 }
 
 void	MusicPlayer::refreshStatus()
 {
-	// An error stands until something is asked of the player again.
-	if (_status == Failed)
+	// An error stands until something is asked of the player again, and while a retry
+	// is waiting the player is stopped on purpose, so its state is not news.
+	if (_status == Failed || _retryPending)
 		return;
 
-	// A live stream is not supposed to end. When one does, the connection dropped, and
-	// saying so beats falling through to the stopped branch below and sitting on
-	// "Connecting…" forever with the watchdog already switched off.
-	if (_player.mediaStatus() == QMediaPlayer::EndOfMedia)
+	// Not wanted: whatever the player is doing is the tail end of a pause or stop, and
+	// the status those set is the one that counts.
+	if (!_wantsPlayback)
+		return;
+
+	QMediaPlayer::MediaStatus	media = _player->mediaStatus();
+
+	// A live stream is not supposed to end. When one does, the connection dropped.
+	if (media == QMediaPlayer::EndOfMedia)
 	{
-		if (_wantsPlayback)
-		{
-			_wantsPlayback = false;
-			_watchdog.stop();
-
-			setStatus(Failed, QStringLiteral("The stream ended"));
-		}
-		else
-			setStatus(Idle);
-
+		scheduleRetry(QStringLiteral("The stream ended"));
 		return;
 	}
 
-	if (_player.playbackState() == QMediaPlayer::PlayingState)
+	if (media == QMediaPlayer::InvalidMedia)
 	{
-		QMediaPlayer::MediaStatus	media = _player.mediaStatus();
+		scheduleRetry(QStringLiteral("The stream could not be read"));
+		return;
+	}
 
+	Status	connecting = _retryAttempt > 0 ? Reconnecting : Connecting;
+
+	if (_player->playbackState() == QMediaPlayer::PlayingState)
+	{
 		if (media == QMediaPlayer::StalledMedia || media == QMediaPlayer::BufferingMedia
 			|| media == QMediaPlayer::LoadingMedia)
 		{
-			setStatus(Connecting);
+			// Also the path a running stream takes when the network goes quiet under it,
+			// so the watchdog is re-armed here as well as in openStream().
+			if (!_watchdog.isActive())
+				_watchdog.start();
+
+			setStatus(connecting);
 			return;
 		}
 
 		_watchdog.stop();
+		_retryAttempt = 0;
+
 		setStatus(Playing);
+		_metadata.start(QUrl(_source));
 		return;
 	}
 
-	if (_player.playbackState() == QMediaPlayer::PausedState)
+	// Stopped underneath while still wanted: the attempt is still on its way.
+	setStatus(connecting);
+}
+
+// A brand new player and output on every connection attempt. Handing the old player a
+// new URL is not enough: the FFmpeg backend holds on to the previous stream's buffer and
+// never reconnects. Throwing the player away and building a fresh one is what forces a
+// genuinely new connection.
+//
+// The output is rebuilt alongside it rather than reused. A QAudioOutput belongs to one
+// player, and destroying the outgoing player would otherwise pull the shared output out
+// from under the new one just as it was starting, which is exactly the kind of half-dead
+// connection this whole exercise is trying to avoid. Reopening the device on a reconnect
+// is cheap next to how rarely reconnects happen.
+void	MusicPlayer::rebuildPlayer()
+{
+	if (_player)
 	{
-		setStatus(Paused);
-		return;
+		// Cut its signals first: a player on its way out can still emit a stopped or
+		// errored state as it tears down, which must not be mistaken for news about the
+		// new one.
+		_player->disconnect(this);
+		_player->stop();
+		_player->setSource(QUrl());
+		_player->setAudioOutput(nullptr);
+		_player->deleteLater();
 	}
 
-	// Stopped. Still connecting counts as wanted, anything else is simply idle.
-	if (_wantsPlayback)
-		setStatus(Connecting);
+	if (_output)
+		_output->deleteLater();
+
+	_output = new QAudioOutput(this);
+	_output->setVolume(_volume);
+
+	_player = new QMediaPlayer(this);
+	_player->setAudioOutput(_output);
+
+	connect(_player, &QMediaPlayer::playbackStateChanged, this, &MusicPlayer::onPlaybackStateChanged);
+	connect(_player, &QMediaPlayer::mediaStatusChanged, this, &MusicPlayer::onMediaStatusChanged);
+	connect(_player, &QMediaPlayer::errorOccurred, this, &MusicPlayer::onErrorOccurred);
+	connect(_player, &QMediaPlayer::metaDataChanged, this, &MusicPlayer::onBackendMetaDataChanged);
+}
+
+void	MusicPlayer::openStream()
+{
+	// Each attempt starts the probe count over; whether the server tolerates the probe
+	// carries across, since that does not change between one attempt and the next.
+	_probeFailures = 0;
+
+	// A pristine player, then the URL. This is the reconnect: the old connection and
+	// everything it had buffered are gone with the old player.
+	rebuildPlayer();
+	_player->setSource(QUrl(_source));
+
+	// The reason for the last drop rides along while reconnecting; a fresh start has
+	// nothing to explain.
+	if (_retryAttempt > 0)
+		setStatus(Reconnecting, _errorText);
 	else
-		setStatus(Idle);
+		setStatus(Connecting);
+
+	_watchdog.start();
+	_player->play();
+}
+
+void	MusicPlayer::scheduleRetry(const QString &reason)
+{
+	if (_retryPending || !_wantsPlayback)
+		return;
+
+	_retryPending = true;
+	_retryAttempt++;
+
+	_watchdog.stop();
+	_metadata.stop();
+
+	// Torn down rather than left to its own devices: a backend that is stuck on a dead
+	// socket will not recover by itself, and the next attempt wants a clean start.
+	_player->stop();
+
+	qInfo("pomodoro: stream dropped (%s), retry %d in %d ms",
+		qPrintable(reason), _retryAttempt, retryDelayMs());
+
+	setStatus(Reconnecting, reason);
+
+	_retryTimer.start(retryDelayMs());
+}
+
+void	MusicPlayer::cancelRetry()
+{
+	_retryPending = false;
+	_retryTimer.stop();
+}
+
+void	MusicPlayer::updateNowPlaying()
+{
+	emit nowPlayingChanged();
+
+	updateControls();
+}
+
+void	MusicPlayer::updateControls()
+{
+	// Listed with the desktop while the user has any interest in music: playing,
+	// trying to, or paused and able to come back. Idle and failed drop the entry.
+	bool	enabled = _wantsPlayback || _status == Paused;
+
+	MediaControls::PlaybackState	state = MediaControls::Stopped;
+
+	// Connecting counts as playing: the user pressed play, so the control they want
+	// to see is pause.
+	if (_status == Playing || _status == Connecting || _status == Reconnecting)
+		state = MediaControls::Playing;
+	else if (_status == Paused)
+		state = MediaControls::Paused;
+
+	QString	title = this->title();
+	QString	station = stationName();
+	QString	shownTitle = title;
+	QString	shownArtist;
+
+	if (title.isEmpty())
+	{
+		// Nothing read yet, or a stream that never says. Fall back through the station
+		// name to the host, so the desktop never shows an empty entry.
+		QString	host = QUrl(_source).host();
+
+		shownTitle = !station.isEmpty() ? station
+			: (host.isEmpty() ? QStringLiteral("Lo-fi stream") : host);
+	}
+	else
+		shownArtist = station;
+
+	// Text before state before enabling, so the entry's first appearance is complete.
+	_controls->setNowPlaying(shownTitle, shownArtist);
+	_controls->setPlaybackState(state);
+	_controls->setEnabled(enabled);
+}
+
+bool	MusicPlayer::networkLooksDown() const
+{
+	QNetworkInformation	*network = QNetworkInformation::instance();
+
+	if (!network)
+		return false;
+
+	switch (network->reachability())
+	{
+		case QNetworkInformation::Reachability::Disconnected:
+		case QNetworkInformation::Reachability::Local:
+		case QNetworkInformation::Reachability::Site:
+			return true;
+		case QNetworkInformation::Reachability::Online:
+		case QNetworkInformation::Reachability::Unknown:
+		default:
+			return false;
+	}
+}
+
+int	MusicPlayer::retryDelayMs() const
+{
+	int	doublings = qBound(0, _retryAttempt - 1, 4);
+
+	return qMin(FirstRetryMs << doublings, MaximumRetryMs);
 }

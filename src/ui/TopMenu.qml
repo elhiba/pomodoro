@@ -143,6 +143,114 @@ Rectangle
             MusicPlayer.toggle()
     }
 
+	// What is on, tucked in beside the music button: the station on the top line, the
+	// track underneath. While the stream is still connecting or coming back after a
+	// drop it says so instead, so a silent player is never a mystery.
+	//
+	// Sized to whatever is left between the button and the centred title, and hidden
+	// outright when there is nothing to say, so an idle player leaves no stub behind.
+	Item
+	{
+		id: nowPlaying
+
+		anchors.left: musicBtn.right
+		anchors.leftMargin: 8
+		anchors.verticalCenter: parent.verticalCenter
+
+		width: Math.max(0, pomodoroText.x - nowPlaying.x - 12)
+		height: parent.height
+
+		visible: nowPlaying.width > 40
+			&& (MusicPlayer.active || MusicPlayer.failed || MusicPlayer.title.length > 0)
+
+		readonly property bool showsStatus:
+			MusicPlayer.status === MusicPlayer.Connecting
+			|| MusicPlayer.status === MusicPlayer.Reconnecting
+			|| MusicPlayer.failed
+
+		readonly property string topLine:
+		{
+			if (nowPlaying.showsStatus)
+				return MusicPlayer.status === MusicPlayer.Reconnecting
+					? "Reconnecting… (attempt " + MusicPlayer.retryAttempt + ")"
+					: MusicPlayer.failed ? "Stream failed" : "Connecting…"
+
+			if (MusicPlayer.stationName.length > 0)
+				return MusicPlayer.stationName + (MusicPlayer.genre.length > 0 ? " · " + MusicPlayer.genre : "")
+
+			return MusicPlayer.genre.length > 0 ? MusicPlayer.genre : "Lo-fi stream"
+		}
+
+		readonly property string bottomLine:
+			nowPlaying.showsStatus && MusicPlayer.title.length === 0
+				? ""
+				: MusicPlayer.title
+
+		Column
+		{
+			anchors.verticalCenter: parent.verticalCenter
+			width: parent.width
+			spacing: 1
+
+			Text
+			{
+				width: parent.width
+
+				text: nowPlaying.topLine
+
+				// The station and title come off the network, so they are shown as plain
+				// text rather than the default AutoText, which would try to render a
+				// crafted title as rich text.
+				textFormat: Text.PlainText
+
+				color: MusicPlayer.failed ? "#ff8a8a" : Qt.rgba(1, 1, 1, 0.65)
+				font.pixelSize: 10
+				font.letterSpacing: 0.4
+				elide: Text.ElideRight
+				maximumLineCount: 1
+
+				// The reconnect line pulses, so a stalled stream reads as still trying
+				// rather than stuck.
+				SequentialAnimation on opacity
+				{
+					running: MusicPlayer.status === MusicPlayer.Reconnecting
+						|| MusicPlayer.status === MusicPlayer.Connecting
+					loops: Animation.Infinite
+					alwaysRunToEnd: true
+
+					NumberAnimation { to: 0.35; duration: 700; easing.type: Easing.InOutSine }
+					NumberAnimation { to: 1.0; duration: 700; easing.type: Easing.InOutSine }
+				}
+			}
+
+			Text
+			{
+				width: parent.width
+
+				text: nowPlaying.bottomLine
+				textFormat: Text.PlainText
+				visible: text.length > 0
+				color: "white"
+				font.pixelSize: 12
+				font.bold: true
+				elide: Text.ElideRight
+				maximumLineCount: 1
+			}
+		}
+
+		// The full text on hover, since the line is elided most of the time.
+		HoverHandler
+		{
+			id: nowPlayingHover
+		}
+
+		ToolTip.visible: nowPlayingHover.hovered && (nowPlaying.bottomLine.length > 0 || nowPlaying.showsStatus)
+		ToolTip.delay: 500
+		ToolTip.text: nowPlaying.showsStatus
+			? MusicPlayer.statusText
+			: (MusicPlayer.stationName.length > 0 ? MusicPlayer.stationName + "\n" : "") + MusicPlayer.title
+	}
+
 	Text
 	{
 		id: pomodoroText

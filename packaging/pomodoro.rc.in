@@ -1,0 +1,8 @@
+// Embeds the application icon into the Windows executable, so Explorer, the taskbar
+// and shortcuts show the logo instead of the generic exe glyph. The icon shown while
+// the window is running still comes from setWindowIcon in main.cpp; this is only what
+// the file itself looks like.
+//
+// Configured by CMake so the path is absolute: MSVC's rc.exe resolves relative paths
+// against the .rc file, windres against the working directory, and this sidesteps both.
+IDI_ICON1 ICON "@POMODORO_WINDOWS_ICON@"

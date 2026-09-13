@@ -1,0 +1,74 @@
+# Builds the app and runs the unit tests on all three desktop platforms for every push
+# to main and every pull request. Packaging is deliberately not done here; that is
+# release.yml's job and only runs for tags.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # Kept in step with the Qt the app is developed against. The Linux arch name changed
+  # to linux_gcc_64 in Qt 6.7, so bump both together if this ever moves.
+  QT_VERSION: 6.6.3
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            os: ubuntu-22.04
+            qt_arch: gcc_64
+          - name: Windows
+            os: windows-2022
+            qt_arch: win64_msvc2019_64
+          - name: macOS
+            os: macos-14
+            qt_arch: clang_64
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt ${{ env.QT_VERSION }}
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: ${{ matrix.qt_arch }}
+          modules: qtmultimedia
+          cache: true
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgl1-mesa-dev libxkbcommon-dev libdbus-1-dev libxcb-cursor0
+
+      # Puts cl.exe and the Windows SDK on PATH; the Qt build above is the MSVC 2019
+      # ABI, which VS 2022 links against without complaint.
+      - name: Set up MSVC
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Configure
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Test
+        run: ctest --test-dir build --output-on-failure
+        env:
+          QT_QPA_PLATFORM: offscreen

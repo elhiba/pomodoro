@@ -16,6 +16,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
 	Quick
 	QuickControls2
 	Multimedia
+	Network
 	Svg
 	DBus
 	Widgets
@@ -49,7 +50,59 @@ qt_add_executable(pomodoro
 
 	src/core/TrayIcon.hpp
 	src/core/TrayIcon.cpp
+
+	src/core/StreamMetadata.hpp
+	src/core/StreamMetadata.cpp
+
+	src/core/MediaControls.hpp
+	src/core/MediaControls.cpp
 )
+
+# The OS media-control bridge is the one part of the app with a different body per
+# platform. Exactly one of these goes in; MediaControls::create() in the common file
+# is the only thing that knows which.
+if(WIN32)
+	target_sources(pomodoro PRIVATE src/core/MediaControlsWindows.cpp)
+
+	# RoGetActivationFactory and the HSTRING helpers.
+	target_link_libraries(pomodoro PRIVATE runtimeobject)
+
+	# A GUI subsystem executable. Without this the linker builds a console program and
+	# Windows opens a terminal window behind the app every time it is launched.
+	set_target_properties(pomodoro PROPERTIES WIN32_EXECUTABLE TRUE)
+
+	# The .exe icon. Configured rather than used directly so the path inside is absolute
+	# and resolves the same way under rc.exe and windres.
+	enable_language(RC)
+	set(POMODORO_WINDOWS_ICON "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons/pomodoro.ico")
+	configure_file(packaging/pomodoro.rc.in "${CMAKE_CURRENT_BINARY_DIR}/pomodoro.rc" @ONLY)
+	target_sources(pomodoro PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/pomodoro.rc")
+elseif(APPLE)
+	enable_language(OBJCXX)
+	target_sources(pomodoro PRIVATE src/core/MediaControlsMac.mm)
+	target_link_libraries(pomodoro PRIVATE "-framework MediaPlayer" "-framework AppKit")
+
+	set_target_properties(pomodoro PROPERTIES
+		MACOSX_BUNDLE TRUE
+		MACOSX_BUNDLE_BUNDLE_NAME "Pomodoro"
+		MACOSX_BUNDLE_GUI_IDENTIFIER "org.elhiba.pomodoro"
+		MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}"
+		MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}"
+	)
+
+	# The .icns is generated on the macOS release runner from the PNG (sips + iconutil),
+	# so it is optional here: a checkout without it still builds, just with no dock icon
+	# until the app sets one at runtime.
+	set(POMODORO_MAC_ICON "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons/pomodoro.icns")
+
+	if(EXISTS "${POMODORO_MAC_ICON}")
+		target_sources(pomodoro PRIVATE "${POMODORO_MAC_ICON}")
+		set_source_files_properties("${POMODORO_MAC_ICON}" PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+		set_target_properties(pomodoro PROPERTIES MACOSX_BUNDLE_ICON_FILE pomodoro.icns)
+	endif()
+else()
+	target_sources(pomodoro PRIVATE src/core/MediaControlsMpris.cpp)
+endif()
 
 # qmltyperegistrar generates #include "PomodoroTimer.hpp" for the QML_ELEMENT types,
 # so src/core has to be on the include path.
@@ -119,6 +172,7 @@ target_link_libraries(pomodoro PRIVATE
 	Qt6::Quick
 	Qt6::QuickControls2
 	Qt6::Multimedia
+	Qt6::Network
 	Qt6::Svg
 	Qt6::DBus
 	Qt6::Widgets
@@ -130,6 +184,7 @@ include(GNUInstallDirs)
 
 install(TARGETS pomodoro
 	RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+	BUNDLE DESTINATION .
 )
 
 install(FILES packaging/pomodoro.desktop
@@ -140,3 +195,12 @@ install(FILES assets/icons/pomodoroLogoTransport.png
 	DESTINATION ${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/500x500/apps
 	RENAME pomodoro.png
 )
+
+# Off by default so a plain configure does not need Qt Test. CI turns it on. Declared
+# before include(CTest), which would otherwise default it to ON.
+option(BUILD_TESTING "Build the unit tests (needs Qt Test)" OFF)
+include(CTest)
+
+if(BUILD_TESTING)
+	add_subdirectory(tests)
+endif()
