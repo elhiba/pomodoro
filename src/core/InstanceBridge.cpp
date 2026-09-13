@@ -39,9 +39,14 @@ bool	InstanceBridge::askRunningInstanceToRaise()
 	if (!bus.isConnected())
 		return false;
 
-	QDBusInterface	running(
+	// Brace-initialised on purpose. With ordinary parentheses GCC 11 reads each
+	// QLatin1String(ServiceName) as a parameter declaration rather than a cast -- the
+	// most vexing parse -- and rejects the two "ServiceName" parameters as a
+	// redefinition. Braces cannot be parsed as a function declaration, so the
+	// ambiguity does not arise.
+	QDBusInterface	running{
 		QLatin1String(ServiceName), QLatin1String(ObjectPath),
-		QLatin1String(ServiceName), bus);
+		QLatin1String(ServiceName), bus};
 
 	if (!running.isValid())
 		return false;
