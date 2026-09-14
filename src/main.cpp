@@ -41,7 +41,7 @@ int main(int ac, char **av)
 	// configuration file lands (~/.config/elhiba/pomodoro.conf).
 	QApplication::setOrganizationName("elhiba");
 	QApplication::setApplicationName("pomodoro");
-	QApplication::setApplicationVersion("1.1.0");
+	QApplication::setApplicationVersion("1.1.1");
 	QApplication::setDesktopFileName("pomodoro");
 
 #ifdef Q_OS_WIN
