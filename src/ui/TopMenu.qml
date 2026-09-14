@@ -45,6 +45,7 @@ Rectangle
         background: Rectangle { color: menuBtn.hovered ? "#929494" : "transparent" }
 
         icon.source: "assets/icons/menu.svg"
+        icon.color: "#e3e3e3"
 
         onClicked:
             rootMenu.settingsRequested()
@@ -286,6 +287,7 @@ Rectangle
             background: Rectangle { color: minBtn.hovered ? "#929494" : "transparent" }
             
             icon.source: "assets/icons/minimize.svg"
+            icon.color: "#e3e3e3"
             
             onClicked:
                 Window.window.showMinimized()
@@ -300,6 +302,7 @@ Rectangle
             background: Rectangle { color: resizeBtn.hovered ? "#929494" : "transparent" }
             
             icon.source: Window.window.visibility === Window.Maximized ? "assets/icons/maximizeReverse.svg" : "assets/icons/maximize.svg"
+            icon.color: "#e3e3e3"
             
             onClicked:
                 if (Window.window.visibility === Window.Maximized)
@@ -317,6 +320,7 @@ Rectangle
 			background: Rectangle { color: closeBtn.hovered ? "#d91629" : "transparent" }
             
             icon.source: "assets/icons/close.svg"
+            icon.color: "#e3e3e3"
 
 			// close() rather than Qt.quit(): it runs the window's closing handler, which
 			// is where anything still buffered gets a chance to reach disk.

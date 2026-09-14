@@ -64,8 +64,8 @@ qt_add_executable(pomodoro
 if(WIN32)
 	target_sources(pomodoro PRIVATE src/core/MediaControlsWindows.cpp)
 
-	# RoGetActivationFactory and the HSTRING helpers.
-	target_link_libraries(pomodoro PRIVATE runtimeobject)
+	# RoGetActivationFactory and the HSTRING helpers; shell32 for the AppUserModelID.
+	target_link_libraries(pomodoro PRIVATE runtimeobject shell32)
 
 	# A GUI subsystem executable. Without this the linker builds a console program and
 	# Windows opens a terminal window behind the app every time it is launched.
@@ -75,6 +75,9 @@ if(WIN32)
 	# and resolves the same way under rc.exe and windres.
 	enable_language(RC)
 	set(POMODORO_WINDOWS_ICON "${CMAKE_CURRENT_SOURCE_DIR}/assets/icons/pomodoro.ico")
+
+	# VERSIONINFO wants the version as a comma-separated quad, not dotted.
+	set(POMODORO_VERSION_COMMA "${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},0")
 	configure_file(packaging/pomodoro.rc.in "${CMAKE_CURRENT_BINARY_DIR}/pomodoro.rc" @ONLY)
 	target_sources(pomodoro PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/pomodoro.rc")
 elseif(APPLE)

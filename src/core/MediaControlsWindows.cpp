@@ -1,6 +1,7 @@
 #include "MediaControls.hpp"
 
 #include <QDebug>
+#include <QDir>
 #include <QGuiApplication>
 #include <QMutex>
 #include <QMutexLocker>
@@ -21,6 +22,8 @@
 #include <roapi.h>
 #include <winstring.h>
 #include <windows.media.h>
+#include <windows.storage.h>
+#include <windows.storage.streams.h>
 #include <systemmediatransportcontrolsinterop.h>
 
 // System Media Transport Controls: the entry in the volume flyout and the lock screen,
@@ -35,7 +38,25 @@
 // it did not create.
 
 using namespace ABI::Windows::Media;
+using ABI::Windows::Foundation::IAsyncOperation;
+using ABI::Windows::Foundation::IAsyncOperationCompletedHandler;
 using ABI::Windows::Foundation::ITypedEventHandler;
+
+// mingw-w64 forward-declares IStorageFileStatics but never defines it, so the single
+// method this file calls is declared here. It sits in the first slot after IInspectable,
+// exactly as in the Windows SDK, and no other slot is ever touched. MSVC builds against
+// the SDK's own definition, hence the guard.
+#ifdef __MINGW32__
+namespace ABI { namespace Windows { namespace Storage {
+
+	struct IStorageFileStatics : public IInspectable
+	{
+		virtual HRESULT STDMETHODCALLTYPE	GetFileFromPathAsync(HSTRING path,
+			IAsyncOperation<ABI::Windows::Storage::StorageFile *> **operation) = 0;
+	};
+
+} } }
+#endif
 
 namespace
 {
@@ -50,7 +71,18 @@ namespace
 	const GUID	ButtonHandlerIid =
 		{0x0557e996, 0x7b23, 0x5bae, {0xaa, 0x81, 0xea, 0x0d, 0x67, 0x11, 0x43, 0xa4}};
 
+	const GUID	StorageFileStaticsIid =
+		{0x5984c710, 0xdaf2, 0x43c8, {0x8b, 0xb4, 0xa4, 0xd3, 0xea, 0xcf, 0xd0, 0x3f}};
+
+	const GUID	StreamReferenceStaticsIid =
+		{0x857309dc, 0x3fbf, 0x4e7d, {0x98, 0x6f, 0xef, 0x3b, 0x1a, 0x07, 0xa9, 0x64}};
+
+	const GUID	FileHandlerIid =
+		{0xe521c894, 0x2c26, 0x5946, {0x9e, 0x61, 0x2b, 0x5e, 0x18, 0x8d, 0x01, 0xed}};
+
 	const wchar_t *const	ControlsClass = L"Windows.Media.SystemMediaTransportControls";
+	const wchar_t *const	StorageFileClass = L"Windows.Storage.StorageFile";
+	const wchar_t *const	StreamReferenceClass = L"Windows.Storage.Streams.RandomAccessStreamReference";
 
 	template <class T>
 	void	release(T *&object)
@@ -152,6 +184,66 @@ namespace
 			WindowsMediaControls	*_owner;
 	};
 
+	// Opening the artwork file is asynchronous, so this is the callback that receives the
+	// StorageFile. It arrives on a thread pool thread and hands the file straight back to
+	// the Qt thread, where the display updater lives.
+	class FileOpenedHandler final
+		: public IAsyncOperationCompletedHandler<ABI::Windows::Storage::StorageFile *>
+	{
+		public:
+			explicit FileOpenedHandler(WindowsMediaControls *owner)
+				: _owner(owner)
+			{
+			}
+
+			void	detach()
+			{
+				QMutexLocker	lock(&_mutex);
+
+				_owner = nullptr;
+			}
+
+			HRESULT STDMETHODCALLTYPE	QueryInterface(REFIID riid, void **object) override
+			{
+				if (!object)
+					return E_POINTER;
+
+				if (IsEqualIID(riid, IID_IUnknown) || IsEqualIID(riid, FileHandlerIid))
+				{
+					*object = static_cast<IUnknown *>(this);
+					AddRef();
+					return S_OK;
+				}
+
+				*object = nullptr;
+				return E_NOINTERFACE;
+			}
+
+			ULONG STDMETHODCALLTYPE	AddRef() override
+			{
+				return ++_references;
+			}
+
+			ULONG STDMETHODCALLTYPE	Release() override
+			{
+				ULONG	remaining = --_references;
+
+				if (remaining == 0)
+					delete this;
+
+				return remaining;
+			}
+
+			HRESULT STDMETHODCALLTYPE	Invoke(
+				IAsyncOperation<ABI::Windows::Storage::StorageFile *> *operation,
+				AsyncStatus status) override;
+
+		private:
+			std::atomic<ULONG>		_references{1};
+			QMutex					_mutex;
+			WindowsMediaControls	*_owner;
+	};
+
 	class WindowsMediaControls final : public MediaControls
 	{
 		public:
@@ -170,6 +262,13 @@ namespace
 					_handler->detach();
 					_handler->Release();
 					_handler = nullptr;
+				}
+
+				if (_fileHandler)
+				{
+					_fileHandler->detach();
+					_fileHandler->Release();
+					_fileHandler = nullptr;
 				}
 
 				release(_updater);
@@ -223,6 +322,40 @@ namespace
 				}
 			}
 
+			// Back on the Qt thread, with the opened file. Turns it into a stream
+			// reference, hands it to the updater and republishes so the flyout picks the
+			// picture up. Takes ownership of the reference it is handed.
+			void	attachThumbnail(ABI::Windows::Storage::IStorageFile *file)
+			{
+				if (!file)
+					return;
+
+				if (_updater)
+				{
+					ABI::Windows::Storage::Streams::IRandomAccessStreamReferenceStatics	*statics = nullptr;
+
+					HString	className(QString::fromWCharArray(StreamReferenceClass));
+
+					if (SUCCEEDED(RoGetActivationFactory(className.get(), StreamReferenceStaticsIid,
+						reinterpret_cast<void **>(&statics))) && statics)
+					{
+						ABI::Windows::Storage::Streams::IRandomAccessStreamReference	*reference = nullptr;
+
+						if (SUCCEEDED(statics->CreateFromFile(file, &reference)) && reference)
+						{
+							_updater->put_Thumbnail(reference);
+							_updater->Update();
+
+							reference->Release();
+						}
+
+						statics->Release();
+					}
+				}
+
+				file->Release();
+			}
+
 		private:
 			bool	_initialised = false;
 			bool	_failed = false;
@@ -236,6 +369,7 @@ namespace
 			ISystemMediaTransportControls				*_controls = nullptr;
 			ISystemMediaTransportControlsDisplayUpdater	*_updater = nullptr;
 			ButtonHandler								*_handler = nullptr;
+			FileOpenedHandler							*_fileHandler = nullptr;
 			EventRegistrationToken						_token = {};
 
 			// The controls are bound to a window, and the singleton that owns this
@@ -298,6 +432,13 @@ namespace
 					return fail("get_DisplayUpdater", hr);
 
 				_updater->put_Type(MediaPlaybackType_Music);
+
+				// Names the app in the flyout, alongside the version resource in the exe.
+				HString	appMediaId(QStringLiteral("Pomodoro"));
+
+				_updater->put_AppMediaId(appMediaId.get());
+
+				requestThumbnail();
 
 				// A live stream: play, pause and stop are the whole vocabulary.
 				_controls->put_IsPlayEnabled(true);
@@ -366,6 +507,54 @@ namespace
 				_controls->put_PlaybackStatus(status);
 			}
 
+			// The artwork shown beside the title. A stream carries no cover of its own --
+			// ICY metadata has no field for one -- so the app's own logo stands in.
+			//
+			// put_Thumbnail needs an IRandomAccessStreamReference, and building one from a
+			// plain path goes through StorageFile, which is asynchronous. This only starts the
+			// request; attachThumbnail finishes once the file is open. CreateFromUri on a
+			// file:// URI looks like a shortcut and is not one: it hands back a reference that
+			// fails on the first read, so the flyout ends up showing no picture at all.
+			void	requestThumbnail()
+			{
+				QString	path = QDir::toNativeSeparators(artworkPath());
+
+				if (path.isEmpty())
+					return;
+
+				ABI::Windows::Storage::IStorageFileStatics	*statics = nullptr;
+
+				HString	className(QString::fromWCharArray(StorageFileClass));
+
+				if (FAILED(RoGetActivationFactory(className.get(), StorageFileStaticsIid,
+					reinterpret_cast<void **>(&statics))) || !statics)
+				{
+					return;
+				}
+
+				HString	pathValue(path);
+
+				IAsyncOperation<ABI::Windows::Storage::StorageFile *>	*operation = nullptr;
+
+				HRESULT	hr = statics->GetFileFromPathAsync(pathValue.get(), &operation);
+
+				statics->Release();
+
+				if (FAILED(hr) || !operation)
+					return;
+
+				_fileHandler = new FileOpenedHandler(this);
+
+				if (FAILED(operation->put_Completed(_fileHandler)))
+				{
+					_fileHandler->detach();
+					_fileHandler->Release();
+					_fileHandler = nullptr;
+				}
+
+				operation->Release();
+			}
+
 			void	applyNowPlaying()
 			{
 				IMusicDisplayProperties	*music = nullptr;
@@ -384,6 +573,37 @@ namespace
 				_updater->Update();
 			}
 	};
+
+	HRESULT STDMETHODCALLTYPE	FileOpenedHandler::Invoke(
+		IAsyncOperation<ABI::Windows::Storage::StorageFile *> *operation, AsyncStatus status)
+	{
+		if (!operation || status != Completed)
+			return S_OK;
+
+		ABI::Windows::Storage::IStorageFile	*file = nullptr;
+
+		if (FAILED(operation->GetResults(&file)) || !file)
+			return S_OK;
+
+		QMutexLocker	lock(&_mutex);
+
+		if (!_owner)
+		{
+			file->Release();
+			return S_OK;
+		}
+
+		// The reference from GetResults is passed on to the queued call, which releases it
+		// once the updater has taken one of its own.
+		WindowsMediaControls	*owner = _owner;
+
+		QMetaObject::invokeMethod(owner, [owner, file]()
+		{
+			owner->attachThumbnail(file);
+		}, Qt::QueuedConnection);
+
+		return S_OK;
+	}
 
 	HRESULT STDMETHODCALLTYPE	ButtonHandler::Invoke(ISystemMediaTransportControls *,
 		ISystemMediaTransportControlsButtonPressedEventArgs *args)

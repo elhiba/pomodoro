@@ -196,12 +196,14 @@ Window
 			color: "white"
 			opacity: 0.9
 
+			// Deliberately not animated. The timer republishes its progress four times a
+			// second and the bar creeps by well under a pixel each time, so a Behavior
+			// here spent the whole session interpolating a change nobody can see -- and
+			// because each animation lasted exactly until the next update arrived, the
+			// scene never went still and Qt Quick redrew at the full refresh rate for
+			// twenty-five minutes at a stretch. Stepping straight to the new width looks
+			// identical and lets the window sit idle between updates.
 			width: parent.width * pomodoroTimer.progress
-
-			Behavior on width
-			{
-				NumberAnimation { duration: 250; easing.type: Easing.Linear }
-			}
 		}
 	}
 
