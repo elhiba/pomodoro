@@ -10,8 +10,7 @@
 #include "InstanceBridge.hpp"
 
 #ifdef Q_OS_WIN
-#include <windows.h>
-#include <shobjidl.h>
+#include "ShellIdentity.hpp"
 #endif
 
 static QString	instanceLockPath()
@@ -46,11 +45,9 @@ int main(int ac, char **av)
 	QApplication::setDesktopFileName("pomodoro");
 
 #ifdef Q_OS_WIN
-	// Gives the process a stable identity for the shell. Without one Windows groups the
-	// window under the bare executable and the media flyout has no app to name, which is
-	// half of why it said "Unknown app"; the other half is the version resource that
-	// packaging/pomodoro.rc.in now embeds.
-	SetCurrentProcessExplicitAppUserModelID(L"elhiba.pomodoro");
+	// Claims the app's identity with the shell, so the media flyout and the volume mixer
+	// can name it and show its icon rather than calling it "Unknown app".
+	registerShellIdentity();
 #endif
 
 	// What the task switcher and the dock show while the window is minimised. On Wayland

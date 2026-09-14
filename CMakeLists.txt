@@ -62,10 +62,16 @@ qt_add_executable(pomodoro
 # platform. Exactly one of these goes in; MediaControls::create() in the common file
 # is the only thing that knows which.
 if(WIN32)
-	target_sources(pomodoro PRIVATE src/core/MediaControlsWindows.cpp)
+	target_sources(pomodoro PRIVATE
+		src/core/MediaControlsWindows.cpp
+		src/core/ShellIdentity.hpp
+		src/core/ShellIdentityWindows.cpp
+	)
 
-	# RoGetActivationFactory and the HSTRING helpers; shell32 for the AppUserModelID.
-	target_link_libraries(pomodoro PRIVATE runtimeobject shell32)
+	# runtimeobject: RoGetActivationFactory and the HSTRING helpers. shell32/ole32: the
+	# AppUserModelID and the Start menu shortcut. propsys/shlwapi: the property store the
+	# shortcut carries its id in.
+	target_link_libraries(pomodoro PRIVATE runtimeobject shell32 ole32 propsys shlwapi)
 
 	# A GUI subsystem executable. Without this the linker builds a console program and
 	# Windows opens a terminal window behind the app every time it is launched.
