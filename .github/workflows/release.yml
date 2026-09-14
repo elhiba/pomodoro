@@ -159,6 +159,13 @@ jobs:
             "/DAppVersion=$version" "/DSourceDir=$(Resolve-Path dist/pomodoro)" `
             packaging/windows/pomodoro.iss
 
+          # Moved up beside the zip, under the same v-prefixed name the other platforms
+          # use. upload-artifact keeps every path relative to the common ancestor of what
+          # it matches, so an installer left in dist/ arrives one directory deep and the
+          # publish job's glob walks straight past it.
+          Move-Item "dist/pomodoro-$version-windows-x64-setup.exe" `
+            "pomodoro-${{ github.ref_name }}-windows-x64-setup.exe"
+
       - name: Sign the installer
         if: env.HAS_SIGNING_CERT == 'true'
         env:
@@ -170,7 +177,7 @@ jobs:
           $signtool = Get-ChildItem "C:/Program Files (x86)/Windows Kits/10/bin" -Recurse -Filter signtool.exe |
             Where-Object { $_.FullName -like "*x64*" } | Select-Object -First 1
           & $signtool.FullName sign /f cert.pfx /p $env:WINDOWS_CERT_PASSWORD `
-            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 (Get-ChildItem dist/*setup.exe)
+            /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 (Get-ChildItem pomodoro-*setup.exe)
           Remove-Item cert.pfx
 
       - uses: actions/upload-artifact@v4
@@ -178,7 +185,7 @@ jobs:
           name: windows
           path: |
             pomodoro-*.zip
-            dist/pomodoro-*setup.exe
+            pomodoro-*setup.exe
           if-no-files-found: error
 
   macos:
