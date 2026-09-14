@@ -56,6 +56,9 @@ qt_add_executable(pomodoro
 
 	src/core/MediaControls.hpp
 	src/core/MediaControls.cpp
+
+	src/core/UpdateChecker.hpp
+	src/core/UpdateChecker.cpp
 )
 
 # The OS media-control bridge is the one part of the app with a different body per
@@ -110,7 +113,11 @@ elseif(APPLE)
 		set_target_properties(pomodoro PROPERTIES MACOSX_BUNDLE_ICON_FILE pomodoro.icns)
 	endif()
 else()
-	target_sources(pomodoro PRIVATE src/core/MediaControlsMpris.cpp)
+	target_sources(pomodoro PRIVATE
+		src/core/MediaControlsMpris.cpp
+		src/core/ShellIdentity.hpp
+		src/core/DesktopIntegrationLinux.cpp
+	)
 endif()
 
 # qmltyperegistrar generates #include "PomodoroTimer.hpp" for the QML_ELEMENT types,

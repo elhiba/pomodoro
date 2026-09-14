@@ -403,6 +403,99 @@ Item
 					wrapMode: Text.WordWrap
 				}
 
+				Rectangle
+				{
+					width: parent.width
+					height: 1
+					color: Qt.rgba(1, 1, 1, 0.15)
+				}
+
+				Text
+				{
+					text: "ABOUT"
+					color: Qt.rgba(1, 1, 1, 0.6)
+					font.pixelSize: 11
+					font.bold: true
+					font.letterSpacing: 1.2
+					topPadding: 14
+					bottomPadding: 6
+				}
+
+				Text
+				{
+					width: parent.width
+					bottomPadding: 8
+
+					text: UpdateChecker.statusText
+					color: UpdateChecker.updateAvailable
+						? "#b6f0b6"
+						: UpdateChecker.status === UpdateChecker.Failed
+							? "#ff8a8a"
+							: Qt.rgba(1, 1, 1, 0.6)
+
+					font.pixelSize: 12
+					wrapMode: Text.WordWrap
+				}
+
+				// One button with two jobs: it looks for a newer release, and once it has
+				// found one it becomes the way to go and get it. The app never downloads
+				// or replaces itself -- the release page is where the user decides.
+				Button
+				{
+					id: updateBtn
+
+					width: parent.width
+					height: 40
+
+					enabled: !UpdateChecker.busy
+					opacity: updateBtn.enabled ? 1.0 : 0.5
+
+					background: Rectangle
+					{
+						radius: 8
+						color: UpdateChecker.updateAvailable
+							? Qt.rgba(0.36, 0.67, 0.36, updateBtn.hovered ? 0.55 : 0.4)
+							: updateBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(1, 1, 1, 0.1)
+
+						border.color: Qt.rgba(1, 1, 1, 0.25)
+						border.width: 1
+
+						Behavior on color
+						{
+							ColorAnimation { duration: 150 }
+						}
+					}
+
+					contentItem: Text
+					{
+						text:
+						{
+							if (UpdateChecker.busy)
+								return "Checking…"
+
+							return UpdateChecker.updateAvailable
+								? "Get version " + UpdateChecker.latestVersion
+								: "Check for updates"
+						}
+
+						color: "white"
+						font.pixelSize: 14
+
+						horizontalAlignment: Text.AlignHCenter
+						verticalAlignment: Text.AlignVCenter
+					}
+
+					onClicked:
+					{
+						SoundPlayer.playClick()
+
+						if (UpdateChecker.updateAvailable)
+							UpdateChecker.openDownloadPage()
+						else
+							UpdateChecker.check()
+					}
+				}
+
 				Item
 				{
 					width: 1

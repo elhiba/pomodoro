@@ -35,16 +35,35 @@ Built with C++17 and Qt 6 (Qt Quick / QML). One binary, no runtime dependencies 
 ## Download
 
 Grab the latest build for your platform from the
-[**Releases**](../../releases/latest) page:
+[**Releases**](../../releases/latest) page. Everything installs into your own user
+account — no administrator, no `sudo`.
 
-| Platform | File |
-| --- | --- |
-| Linux | `pomodoro-*-x86_64.AppImage` — `chmod +x` it and run |
-| Windows | `pomodoro-*-windows-x64.zip` — unzip and run `pomodoro.exe` |
-| macOS | `pomodoro-*-macos.dmg` — open and drag to Applications |
+| Platform | File | How |
+| --- | --- | --- |
+| Windows | `pomodoro-*-windows-x64-setup.exe` | Run it. Installs to `%LOCALAPPDATA%\Programs\Pomodoro`, adds a Start menu entry and an uninstaller. |
+| Windows (portable) | `pomodoro-*-windows-x64.zip` | Unzip anywhere and run `pomodoro.exe`. |
+| Linux | `pomodoro-*-x86_64.AppImage` | `chmod +x` it and run. It adds itself to your launcher on first start. |
+| macOS | `pomodoro-*-macos.dmg` | Open it and drag Pomodoro to Applications. |
 
-On macOS the app is unsigned, so the first launch needs right-click → Open. On Linux the
-AppImage needs FUSE; most desktops have it, otherwise run it with `--appimage-extract-and-run`.
+Once installed the app appears in the Start menu, your desktop's launcher or Spotlight,
+with its icon, by typing its name. On Linux the AppImage writes a desktop entry to
+`~/.local/share/applications` the first time it runs, so it is searchable without being
+unpacked anywhere; delete that file to remove it.
+
+**Check for updates** lives at the bottom of the settings drawer. It asks GitHub what the
+newest release is and, when there is one, takes you to the download page — the app never
+replaces itself behind your back.
+
+### About the security warnings
+
+The builds are not code-signed, so the first launch shows a warning: on Windows
+"Windows protected your PC … Unknown publisher" (click **More info → Run anyway**), and on
+macOS an unidentified-developer notice (right-click the app → **Open**). This is not a
+sign that anything is wrong with the download — it is what every unsigned application
+looks like. Removing it requires a paid code-signing certificate, which this project does
+not have; the CI is set up to sign automatically if one is ever added. Every release is
+built in public by GitHub Actions from the tagged commit, so you can read exactly what
+went into it.
 
 ## Keyboard shortcuts
 

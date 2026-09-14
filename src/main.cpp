@@ -9,7 +9,7 @@
 
 #include "InstanceBridge.hpp"
 
-#ifdef Q_OS_WIN
+#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
 #include "ShellIdentity.hpp"
 #endif
 
@@ -44,9 +44,12 @@ int main(int ac, char **av)
 	QApplication::setApplicationVersion("1.1.1");
 	QApplication::setDesktopFileName("pomodoro");
 
-#ifdef Q_OS_WIN
-	// Claims the app's identity with the shell, so the media flyout and the volume mixer
-	// can name it and show its icon rather than calling it "Unknown app".
+#if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
+	// Introduces the app to the desktop it is running on. On Windows that is the
+	// AppUserModelID and a Start menu entry, without which the media flyout calls it
+	// "Unknown app"; on Linux it is a .desktop file under ~/.local/share, without which
+	// an AppImage never appears in the launcher at all. Both are per-user and need no
+	// administrator.
 	registerShellIdentity();
 #endif
 
