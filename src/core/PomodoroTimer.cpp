@@ -8,7 +8,11 @@ PomodoroTimer::PomodoroTimer(QObject *parent)
 
 	connect(&_tickTimer, &QTimer::timeout, this, &PomodoroTimer::onTick);
 
-	applyMode(_mode);
+	initSession(Focus);
+	initSession(ShortBreak);
+	initSession(LongBreak);
+
+	loadSession(_mode);
 }
 
 PomodoroTimer::Mode	PomodoroTimer::mode() const
@@ -113,8 +117,12 @@ void	PomodoroTimer::setFocusMinutes(int minutes)
 	emit focusMinutesChanged();
 
 	// Only a session that has not started yet may be re-lengthened under the user.
-	if (_mode == Focus && _state == Idle)
-		applyMode(Focus);
+	if (_sessions[Focus].state == Idle)
+	{
+		initSession(Focus);
+		if (_mode == Focus)
+			loadSession(Focus);
+	}
 }
 
 void	PomodoroTimer::setShortBreakMinutes(int minutes)
@@ -127,8 +135,12 @@ void	PomodoroTimer::setShortBreakMinutes(int minutes)
 	_shortBreakMinutes = minutes;
 	emit shortBreakMinutesChanged();
 
-	if (_mode == ShortBreak && _state == Idle)
-		applyMode(ShortBreak);
+	if (_sessions[ShortBreak].state == Idle)
+	{
+		initSession(ShortBreak);
+		if (_mode == ShortBreak)
+			loadSession(ShortBreak);
+	}
 }
 
 void	PomodoroTimer::setLongBreakMinutes(int minutes)
@@ -141,8 +153,12 @@ void	PomodoroTimer::setLongBreakMinutes(int minutes)
 	_longBreakMinutes = minutes;
 	emit longBreakMinutesChanged();
 
-	if (_mode == LongBreak && _state == Idle)
-		applyMode(LongBreak);
+	if (_sessions[LongBreak].state == Idle)
+	{
+		initSession(LongBreak);
+		if (_mode == LongBreak)
+			loadSession(LongBreak);
+	}
 }
 
 void	PomodoroTimer::setRoundsBeforeLongBreak(int rounds)
@@ -158,35 +174,54 @@ void	PomodoroTimer::setRoundsBeforeLongBreak(int rounds)
 
 void	PomodoroTimer::start()
 {
-	if (_state == Running)
+	SessionState	&s = _sessions[_mode];
+
+	if (s.state == Running)
 		return;
 
 	// Starting from a session that already ran out means starting it over.
-	if (_remainingMs <= 0)
-		applyMode(_mode);
+	if (s.remainingMs <= 0)
+		initSession(_mode);
 
-	_elapsed.start();
+	for (int m = 0; m < 3; m++)
+	{
+		if (m != _mode && _sessions[m].state == Running)
+			initSession(static_cast<Mode>(m));
+	}
+
+	s.elapsed.start();
+	s.state = Running;
+
 	_tickTimer.start();
 
-	setState(Running);
-	refresh();
+	loadSession(_mode);
 }
 
 void	PomodoroTimer::pause()
 {
-	if (_state != Running)
+	SessionState	&s = _sessions[_mode];
+
+	if (s.state != Running)
 		return;
 
-	_consumedMs += _elapsed.elapsed();
-	_tickTimer.stop();
+	s.consumedMs += s.elapsed.elapsed();
+	s.state = Paused;
 
-	setState(Paused);
-	refresh();
+	bool anyRunning = false;
+	for (int m = 0; m < 3; m++)
+	{
+		if (_sessions[m].state == Running)
+			anyRunning = true;
+	}
+	if (!anyRunning)
+		_tickTimer.stop();
+
+	loadSession(_mode);
 }
 
 void	PomodoroTimer::toggle()
 {
-	if (_state == Running)
+	if (_sessions[_mode].state == Running)
 		pause();
 	else
 		start();
@@ -194,38 +229,58 @@ void	PomodoroTimer::toggle()
 
 void	PomodoroTimer::reset()
 {
-	_tickTimer.stop();
+	initSession(_mode);
 
-	setState(Idle);
-	applyMode(_mode);
+	bool anyRunning = false;
+	for (int m = 0; m < 3; m++)
+	{
+		if (_sessions[m].state == Running)
+			anyRunning = true;
+	}
+	if (!anyRunning)
+		_tickTimer.stop();
+
+	loadSession(_mode);
 }
 
 void	PomodoroTimer::skip()
 {
 	// A skipped session was not completed, so it does not count towards a long break.
+	initSession(_mode);
 	setMode(nextMode());
 }
 
 void	PomodoroTimer::setMode(Mode mode)
 {
-	_tickTimer.stop();
-	setState(Idle);
+	if (_mode == mode)
+		return;
 
-	if (_mode != mode)
-	{
-		_mode = mode;
-		emit modeChanged();
-	}
+	_mode = mode;
+	emit modeChanged();
 
-	applyMode(mode);
+	loadSession(mode);
 }
 
 void	PomodoroTimer::onTick()
 {
-	refresh();
+	for (int m = 0; m < 3; m++)
+	{
+		SessionState	&s = _sessions[m];
+		if (s.state == Running)
+		{
+			qint64 consumed = s.consumedMs + s.elapsed.elapsed();
+			s.remainingMs = qMax<qint64>(0, s.totalMs - consumed);
+			s.remainingSeconds = static_cast<int>((s.remainingMs + 999) / 1000);
 
-	if (_remainingMs <= 0)
-		finishSession();
+			if (s.remainingMs <= 0)
+			{
+				finishSession(static_cast<Mode>(m));
+				return;
+			}
+		}
+	}
+
+	refresh();
 }
 
 int	PomodoroTimer::minutesFor(Mode mode) const
@@ -259,42 +314,68 @@ void	PomodoroTimer::setState(State state)
 		return;
 
 	_state = state;
+	_sessions[_mode].state = state;
 	emit stateChanged();
+}
+
+void	PomodoroTimer::initSession(Mode mode)
+{
+	qint64	total = static_cast<qint64>(minutesFor(mode)) * 60 * 1000;
+	SessionState	&s = _sessions[mode];
+	s.state = Idle;
+	s.totalMs = total;
+	s.consumedMs = 0;
+	s.remainingMs = total;
+	s.remainingSeconds = static_cast<int>((total + 999) / 1000);
+}
+
+void	PomodoroTimer::loadSession(Mode mode)
+{
+	SessionState	&s = _sessions[mode];
+	setState(s.state);
+
+	if (_totalMs != s.totalMs)
+	{
+		_totalMs = s.totalMs;
+		emit totalSecondsChanged();
+	}
+
+	_consumedMs = s.consumedMs;
+
+	if (_remainingMs != s.remainingMs)
+	{
+		_remainingMs = s.remainingMs;
+		emit progressChanged();
+	}
+
+	if (_remainingSeconds != s.remainingSeconds)
+	{
+		_remainingSeconds = s.remainingSeconds;
+		emit remainingSecondsChanged();
+		emit displayTimeChanged();
+	}
 }
 
 void	PomodoroTimer::applyMode(Mode mode)
 {
-	qint64	total = static_cast<qint64>(minutesFor(mode)) * 60 * 1000;
-
-	_consumedMs = 0;
-
-	if (_totalMs != total)
-	{
-		_totalMs = total;
-		emit totalSecondsChanged();
-	}
-
-	refresh();
+	initSession(mode);
+	if (_mode == mode)
+		loadSession(mode);
 }
 
 void	PomodoroTimer::refresh()
 {
-	qint64	consumed = _consumedMs;
+	const SessionState	&s = _sessions[_mode];
 
-	if (_state == Running)
-		consumed += _elapsed.elapsed();
-
-	qint64	remaining = qMax<qint64>(0, _totalMs - consumed);
-
-	if (_remainingMs != remaining)
+	if (_remainingMs != s.remainingMs)
 	{
-		_remainingMs = remaining;
+		_remainingMs = s.remainingMs;
 		emit progressChanged();
 	}
 
 	// Round up, so a fresh 25 minute session reads 25:00 rather than 24:59
 	// and the display only reaches 00:00 when the session is genuinely over.
-	int	seconds = static_cast<int>((remaining + 999) / 1000);
+	int	seconds = static_cast<int>((s.remainingMs + 999) / 1000);
 
 	if (_remainingSeconds != seconds)
 	{
@@ -306,12 +387,13 @@ void	PomodoroTimer::refresh()
 
 void	PomodoroTimer::finishSession()
 {
-	Mode	finished = _mode;
+	finishSession(_mode);
+}
 
+void	PomodoroTimer::finishSession(Mode finished)
+{
 	// Read before setMode re-arms the clock for the next session.
-	int		durationSeconds = static_cast<int>(_totalMs / 1000);
-
-	_tickTimer.stop();
+	int		durationSeconds = static_cast<int>(_sessions[finished].totalMs / 1000);
 
 	if (finished == Focus)
 	{
@@ -320,6 +402,9 @@ void	PomodoroTimer::finishSession()
 	}
 
 	Mode	next = nextMode();
+
+	initSession(finished);
+	initSession(next);
 
 	setMode(next);
 
@@ -331,4 +416,15 @@ void	PomodoroTimer::finishSession()
 
 	if (autoStart)
 		start();
+	else
+	{
+		bool anyRunning = false;
+		for (int m = 0; m < 3; m++)
+		{
+			if (_sessions[m].state == Running)
+				anyRunning = true;
+		}
+		if (!anyRunning)
+			_tickTimer.stop();
+	}
 }
