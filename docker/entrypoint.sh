@@ -39,6 +39,40 @@ case "${1:-test}" in
 		ctest --test-dir "$BUILD_DIR" --output-on-failure
 		;;
 
+	# Starts the app headless, lets it settle, and fails on anything that means the UI
+	# did not really come up. `test` cannot catch this: it exercises the timer's state
+	# machine and never loads a QML file or an icon, which is exactly how a missing SVG
+	# image plugin reached a contributor with every title-bar button blank.
+	#
+	# Audio is not checked. A container has no sound device and QSoundEffect says so
+	# loudly; that is expected here and must not fail the run.
+	smoke)
+		compile
+
+		log=$(mktemp)
+		code=0
+
+		# 15s is long enough for the window, the QML engine and the first paint. The app
+		# is meant to keep running, so being killed at the end is the success case.
+		QT_QPA_PLATFORM=offscreen timeout --signal=TERM 15 "$BUILD_DIR/pomodoro" >"$log" 2>&1 || code=$?
+
+		# 124 is timeout doing its job; 0 would mean the app quit by itself, which is
+		# fine too. Anything else is a crash or a failed start.
+		if [ "$code" -ne 124 ] && [ "$code" -ne 0 ]; then
+			echo "smoke: the app exited with $code" >&2
+			cat "$log" >&2
+			exit 1
+		fi
+
+		if grep -qiE 'Unsupported image format|Error decoding|is not installed|module .* not found|QQmlApplicationEngine failed' "$log"; then
+			echo "smoke: the window came up but its assets did not" >&2
+			grep -iE 'Unsupported image format|Error decoding|is not installed|module .* not found|QQmlApplicationEngine failed' "$log" >&2
+			exit 1
+		fi
+
+		echo "smoke: the app started and loaded its QML and icons cleanly"
+		;;
+
 	# Opens the actual window. Needs an X server on the host and DISPLAY passed through;
 	# docker-compose.yml wires that up, and the README says which hosts it works on.
 	run)

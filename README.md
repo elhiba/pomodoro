@@ -95,6 +95,7 @@ targets — `make` on its own lists them all:
 | Command | Does |
 | --- | --- |
 | `make test` | Compile and run the tests. What a pull request should pass. |
+| `make smoke` | Start the app headless and check its QML and icons actually load. |
 | `make build` | Compile only. |
 | `make shell` | A prompt inside the toolchain. |
 | `make run` | Open the actual window (see the note below). |
@@ -108,6 +109,21 @@ collide with a native build on the same checkout.
 is already running. On macOS it needs XQuartz and on Windows an X server such as VcXsrv,
 both with connections from the container allowed. **The tests need none of this**, which
 is why testing is the path that works everywhere.
+
+The container has no sound card, so running the GUI inside it prints a few warnings that
+are expected and harmless:
+
+```
+PulseAudioService: pa_context_connect() failed
+qt.multimedia.soundeffect: Failed to update audio output. No audio devices available.
+pomodoro: could not load sound ...
+Failed to open VDPAU backend ...
+```
+
+The timer, the window and the stream all work; only the alarm and click cues are silent.
+Getting audio out of a container means handing it the host's sound socket, which is
+specific to each machine and deliberately not wired up here. Run the app natively to hear
+it.
 
 Everything is plain `docker compose` underneath if you would rather not use `make`:
 

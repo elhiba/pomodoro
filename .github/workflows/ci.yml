@@ -88,3 +88,8 @@ jobs:
 
       - name: Compile and test inside it
         run: docker compose run --rm test
+
+      # The tests never open a window, so they cannot notice a missing QML module or
+      # image plugin. This starts the app for real and fails if its assets did not load.
+      - name: Start the app and check its assets load
+        run: docker compose run --rm smoke

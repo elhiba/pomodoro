@@ -35,6 +35,12 @@ services:
     <<: *toolchain
     command: ["build"]
 
+  # Starts the app headless and fails if its QML or icons did not load. Catches the
+  # things `test` cannot see, without needing an X server.
+  smoke:
+    <<: *toolchain
+    command: ["smoke"]
+
   shell:
     <<: *toolchain
     command: ["shell"]

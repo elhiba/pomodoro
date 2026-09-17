@@ -21,9 +21,13 @@ ENV DEBIAN_FRONTEND=noninteractive
 # Split into three groups on purpose:
 #   * the toolchain CMakeLists.txt needs,
 #   * the Qt development packages, one per component in its find_package call,
-#   * the QML modules and X libraries, which are only needed to actually open the window
-#     -- the tests are headless and would not miss them, but leaving them out would make
-#     `make run` fail with an import error that is tedious to diagnose.
+#   * the QML modules, icon plugins and X libraries, which are only needed to actually
+#     open the window -- the tests are headless and would not miss them.
+#
+# qt6-svg-plugins is the easy one to get wrong. Linking Qt6::Svg gives the app the SVG
+# *library*; the imageformats plugin that lets QImageReader decode an .svg at all lives in
+# a separate package, and without it every icon in the title bar quietly fails to load
+# with "Unsupported image format" while the rest of the window draws perfectly.
 RUN apt-get update && apt-get install --no-install-recommends --yes \
         build-essential \
         cmake \
@@ -42,6 +46,7 @@ RUN apt-get update && apt-get install --no-install-recommends --yes \
         libxkbcommon-dev \
         libdbus-1-dev \
         \
+        qt6-svg-plugins \
         qml6-module-qtquick \
         qml6-module-qtquick-controls \
         qml6-module-qtquick-templates \
@@ -53,6 +58,15 @@ RUN apt-get update && apt-get install --no-install-recommends --yes \
         dbus-x11 \
         fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
+
+# Qt complains at every launch under a non-UTF-8 locale, and a slim Debian image has none
+# set at all. C.UTF-8 is built into glibc, so this needs no extra package.
+ENV LANG=C.UTF-8
+ENV LC_ALL=C.UTF-8
+
+# Where Qt keeps its own runtime files. Without it every launch opens with a warning about
+# falling back to /tmp, which reads like a fault and is not one.
+ENV XDG_RUNTIME_DIR=/tmp/runtime-root
 
 # Qt Quick is told to draw on the CPU here for the same reason main.cpp defaults to it:
 # a container has no GPU worth using, and without this the app falls back through a
@@ -67,6 +81,9 @@ ENV QT_QPA_PLATFORM=offscreen
 # directory full of that platform's object files, and pointing the container at the same
 # path would have the two toolchains overwrite each other's CMake cache.
 ENV BUILD_DIR=/work/build-docker
+
+# 0700 because Qt checks the permissions and warns when anyone else could read it.
+RUN mkdir -p /tmp/runtime-root && chmod 0700 /tmp/runtime-root
 
 WORKDIR /work
 

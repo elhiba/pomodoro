@@ -14,7 +14,7 @@ RUN     := $(COMPOSE) run --rm
 NATIVE_BUILD_DIR ?= build
 
 .DEFAULT_GOAL := help
-.PHONY: help image test build run shell clean rebuild native-build native-test native-run native-clean
+.PHONY: help image test smoke build run shell clean rebuild native-build native-test native-run native-clean
 
 help:
 	@echo "Pomodoro - development commands"
@@ -22,6 +22,7 @@ help:
 	@echo "  In Docker (nothing to install but Docker itself):"
 	@echo "    make image         build the toolchain image"
 	@echo "    make test          compile and run the tests"
+	@echo "    make smoke         start the app headless, check its QML and icons load"
 	@echo "    make build         compile only"
 	@echo "    make run           open the window (needs an X server, see README)"
 	@echo "    make shell         a prompt inside the toolchain"
@@ -41,6 +42,9 @@ image:
 
 test:
 	$(RUN) test
+
+smoke:
+	$(RUN) smoke
 
 build:
 	$(RUN) build
