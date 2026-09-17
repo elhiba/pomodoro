@@ -115,6 +115,16 @@ class PomodoroTimer : public QObject
 	private:
 		static constexpr int	TickIntervalMs = 250;
 
+		struct SessionState
+		{
+			State			state = Idle;
+			qint64			totalMs = 0;
+			qint64			consumedMs = 0;
+			qint64			remainingMs = 0;
+			int				remainingSeconds = 0;
+			QElapsedTimer	elapsed;
+		};
+
 		QTimer			_tickTimer;
 		QElapsedTimer	_elapsed;
 
@@ -139,12 +149,17 @@ class PomodoroTimer : public QObject
 		qint64	_remainingMs = 0;
 		int		_remainingSeconds = 0;
 
+		SessionState	_sessions[3];
+
 		int		minutesFor(Mode mode) const;
 		Mode	nextMode() const;
 
 		void	setState(State state);
 		void	applyMode(Mode mode);
+		void	initSession(Mode mode);
+		void	loadSession(Mode mode);
 		void	refresh();
+		void	finishSession(Mode finished);
 		void	finishSession();
 };
 

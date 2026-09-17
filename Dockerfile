@@ -38,6 +38,7 @@ RUN apt-get update && apt-get install --no-install-recommends --yes \
         qt6-declarative-dev-tools \
         qt6-multimedia-dev \
         qt6-svg-dev \
+        qt6-svg-plugins \
         libgl1-mesa-dev \
         libxkbcommon-dev \
         libdbus-1-dev \
