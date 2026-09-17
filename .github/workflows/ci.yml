@@ -72,3 +72,19 @@ jobs:
         run: ctest --test-dir build --output-on-failure
         env:
           QT_QPA_PLATFORM: offscreen
+
+  # Proves the container really does carry every dependency the build needs. Without
+  # this the Dockerfile's apt list is only a claim, and the first person to discover a
+  # missing package would be a contributor trying to get started.
+  docker:
+    name: Docker image
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker compose build
+
+      - name: Compile and test inside it
+        run: docker compose run --rm test

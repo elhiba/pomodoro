@@ -76,23 +76,62 @@ went into it.
 | `Esc` | Close the open drawer |
 | `Ctrl` + `Q` | Quit |
 
-## Building from source
+## Building and testing
+
+### With Docker — nothing to install but Docker
+
+The image carries the compiler, Qt and every library the app links against, so there is
+nothing to install and nothing to go missing. It compiles whatever is in your working
+copy, not a copy baked into the image, so this is the quickest way to check a change
+before opening a pull request:
+
+```bash
+make test
+```
+
+That builds the image on first use, compiles the app and runs the test suite. Other
+targets — `make` on its own lists them all:
+
+| Command | Does |
+| --- | --- |
+| `make test` | Compile and run the tests. What a pull request should pass. |
+| `make build` | Compile only. |
+| `make shell` | A prompt inside the toolchain. |
+| `make run` | Open the actual window (see the note below). |
+| `make clean` | Throw away the container's build tree. |
+| `make rebuild` | Rebuild the image ignoring the cache, then test. |
+
+The container builds into `build-docker/` — kept separate from `build/` so it can never
+collide with a native build on the same checkout.
+
+`make run` opens a real window and therefore needs an X server on the host. On Linux that
+is already running. On macOS it needs XQuartz and on Windows an X server such as VcXsrv,
+both with connections from the container allowed. **The tests need none of this**, which
+is why testing is the path that works everywhere.
+
+Everything is plain `docker compose` underneath if you would rather not use `make`:
+
+```bash
+docker compose run --rm test
+```
+
+### Natively
 
 Requirements: CMake ≥ 3.21, Ninja, and Qt ≥ 6.5 with the Core, Gui, Qml, Quick,
 QuickControls2, Multimedia, Network, Svg, DBus and Widgets modules.
 
 ```bash
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build
-./build/pomodoro          # pomodoro.exe on Windows
+make native-test      # configure, compile and run the tests
+make native-run       # build and launch
 ```
 
-To build and run the unit tests:
+Or by hand, which is all the above does:
 
 ```bash
-cmake -S . -B build -G Ninja -DBUILD_TESTING=ON
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
+./build/pomodoro          # pomodoro.exe on Windows
 ```
 
 ### Releasing

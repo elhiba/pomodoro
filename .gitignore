@@ -1,4 +1,6 @@
 .cache/
 build/
+# The container builds here so it never collides with a native build/ tree.
+build-docker/
 compile_commands.json
 

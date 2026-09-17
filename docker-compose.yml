@@ -1,0 +1,63 @@
+# Ways to run the build environment. Every service shares one image and one bind mount;
+# they differ only in what they ask the entrypoint to do.
+#
+#   docker compose run --rm test     compile and run the tests
+#   docker compose run --rm build    compile only
+#   docker compose run --rm shell    a prompt inside the toolchain
+#   docker compose run --rm app      open the window (needs an X server, see README)
+#
+# Or through the Makefile, which is shorter: make test, make build, make shell, make run.
+
+services:
+  # The base definition the rest extend. Not meant to be run on its own.
+  toolchain: &toolchain
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pomodoro-dev:latest
+    working_dir: /work
+    volumes:
+      # The checkout itself, so the container compiles whatever is on the host right now.
+      - .:/work
+      # A named volume for the build tree. Keeping it out of the bind mount means object
+      # files never land in the working copy, and the compile cache survives between runs
+      # without being wiped by a `git clean`.
+      - pomodoro-build:/work/build-docker
+    # Without a tty the build output arrives in one lump at the end rather than as it
+    # happens, which makes a long compile look like a hang.
+    tty: true
+
+  test:
+    <<: *toolchain
+    command: ["test"]
+
+  build:
+    <<: *toolchain
+    command: ["build"]
+
+  shell:
+    <<: *toolchain
+    command: ["shell"]
+    stdin_open: true
+
+  # Running the GUI needs the host's X server. On Linux that is already there; on Windows
+  # and macOS it means installing one (VcXsrv, XQuartz) and allowing connections. The
+  # tests deliberately do not need any of this.
+  app:
+    <<: *toolchain
+    command: ["run"]
+    environment:
+      # Passed through from the host, defaulting to the usual first display so a plain
+      # `docker compose run app` works on a normal Linux desktop.
+      DISPLAY: "${DISPLAY:-:0}"
+      # The window needs a real platform plugin, not the offscreen one the image defaults
+      # to for the tests.
+      QT_QPA_PLATFORM: xcb
+    volumes:
+      - .:/work
+      - pomodoro-build:/work/build-docker
+      # The X socket. Read-only: the container has no business writing to it.
+      - /tmp/.X11-unix:/tmp/.X11-unix:ro
+
+volumes:
+  pomodoro-build:

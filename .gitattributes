@@ -1,0 +1,17 @@
+# Normalise line endings so the repository is the same on every machine.
+* text=auto
+
+# These are read by Linux inside the container. A checkout on Windows that turned them
+# into CRLF would leave the shell script failing with "bad interpreter" and make
+# refusing its own recipes, so they are pinned to LF wherever they are checked out.
+*.sh          text eol=lf
+Makefile      text eol=lf
+Dockerfile    text eol=lf
+*.yml         text eol=lf
+
+# Binary assets must never be touched.
+*.png  binary
+*.ico  binary
+*.icns binary
+*.ttf  binary
+*.wav  binary

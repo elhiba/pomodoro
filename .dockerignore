@@ -1,0 +1,15 @@
+# The build context only needs the sources and the packaging files. Everything below is
+# either host-specific, enormous, or would invalidate the image cache on every commit.
+.git
+.github
+build
+build-docker
+.cache
+compile_commands.json
+dist
+AppDir
+*.AppImage
+*.dmg
+*.zip
+CLAUDE.md
+.claude
