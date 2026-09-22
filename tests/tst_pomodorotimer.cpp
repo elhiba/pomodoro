@@ -19,7 +19,8 @@ class TestPomodoroTimer : public QObject
 		void	startPauseResumeReset();
 		void	remainingCountsDownWhileRunning();
 		void	skipCyclesThroughModesWithoutCountingRounds();
-		void	setModeAbandonsTheCurrentSession();
+		void	setModePreservesRunningSession();
+		void	setModeSameModeIsIgnored();
 		void	roundsBeforeLongBreakHasAFloor();
 		void	automationFlagsRoundTrip();
 };
@@ -157,24 +158,41 @@ void	TestPomodoroTimer::skipCyclesThroughModesWithoutCountingRounds()
 	QVERIFY(timer.mode() != PomodoroTimer::LongBreak);
 }
 
-void	TestPomodoroTimer::setModeAbandonsTheCurrentSession()
+void	TestPomodoroTimer::setModePreservesRunningSession()
+{
+	PomodoroTimer	timer;
+
+	timer.start();
+	QCOMPARE(timer.state(), PomodoroTimer::Running);
+
+	QTRY_COMPARE_WITH_TIMEOUT(timer.remainingSeconds(), timer.totalSeconds() - 1, 3000);
+
+	int	remainingBeforeSwitch = timer.remainingSeconds();
+
+	timer.setMode(PomodoroTimer::ShortBreak);
+	QCOMPARE(timer.mode(), PomodoroTimer::ShortBreak);
+	QCOMPARE(timer.state(), PomodoroTimer::Idle);
+	QCOMPARE(timer.totalSeconds(), timer.shortBreakMinutes() * 60);
+
+	QTest::qWait(1200);
+
+	timer.setMode(PomodoroTimer::Focus);
+	QCOMPARE(timer.mode(), PomodoroTimer::Focus);
+	QCOMPARE(timer.state(), PomodoroTimer::Running);
+	QVERIFY(timer.remainingSeconds() < remainingBeforeSwitch);
+}
+
+void	TestPomodoroTimer::setModeSameModeIsIgnored()
 {
 	PomodoroTimer	timer;
 	QSignalSpy		modeChanged(&timer, &PomodoroTimer::modeChanged);
 
 	timer.start();
-	timer.setMode(PomodoroTimer::LongBreak);
+	QCOMPARE(timer.state(), PomodoroTimer::Running);
 
-	QCOMPARE(timer.mode(), PomodoroTimer::LongBreak);
-	QCOMPARE(timer.state(), PomodoroTimer::Idle);
-	QCOMPARE(timer.remainingSeconds(), timer.longBreakMinutes() * 60);
-	QCOMPARE(modeChanged.count(), 1);
-
-	// Re-selecting the current mode restarts it without announcing a mode change.
-	timer.start();
-	timer.setMode(PomodoroTimer::LongBreak);
-	QCOMPARE(timer.state(), PomodoroTimer::Idle);
-	QCOMPARE(modeChanged.count(), 1);
+	timer.setMode(PomodoroTimer::Focus);
+	QCOMPARE(timer.state(), PomodoroTimer::Running);
+	QCOMPARE(modeChanged.count(), 0);
 }
 
 void	TestPomodoroTimer::roundsBeforeLongBreakHasAFloor()

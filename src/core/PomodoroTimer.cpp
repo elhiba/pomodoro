@@ -8,6 +8,13 @@ PomodoroTimer::PomodoroTimer(QObject *parent)
 
 	connect(&_tickTimer, &QTimer::timeout, this, &PomodoroTimer::onTick);
 
+	for (int i = 0; i < 3; ++i)
+	{
+		_modeStates[i].state = Idle;
+		_modeStates[i].totalMs = static_cast<qint64>(minutesFor(static_cast<Mode>(i))) * 60 * 1000;
+		_modeStates[i].consumedMs = 0;
+	}
+
 	applyMode(_mode);
 }
 
@@ -112,6 +119,9 @@ void	PomodoroTimer::setFocusMinutes(int minutes)
 	_focusMinutes = minutes;
 	emit focusMinutesChanged();
 
+	if (_modeStates[Focus].state == Idle)
+		_modeStates[Focus].totalMs = static_cast<qint64>(minutes) * 60 * 1000;
+
 	// Only a session that has not started yet may be re-lengthened under the user.
 	if (_mode == Focus && _state == Idle)
 		applyMode(Focus);
@@ -127,6 +137,9 @@ void	PomodoroTimer::setShortBreakMinutes(int minutes)
 	_shortBreakMinutes = minutes;
 	emit shortBreakMinutesChanged();
 
+	if (_modeStates[ShortBreak].state == Idle)
+		_modeStates[ShortBreak].totalMs = static_cast<qint64>(minutes) * 60 * 1000;
+
 	if (_mode == ShortBreak && _state == Idle)
 		applyMode(ShortBreak);
 }
@@ -140,6 +153,9 @@ void	PomodoroTimer::setLongBreakMinutes(int minutes)
 
 	_longBreakMinutes = minutes;
 	emit longBreakMinutesChanged();
+
+	if (_modeStates[LongBreak].state == Idle)
+		_modeStates[LongBreak].totalMs = static_cast<qint64>(minutes) * 60 * 1000;
 
 	if (_mode == LongBreak && _state == Idle)
 		applyMode(LongBreak);
@@ -161,11 +177,21 @@ void	PomodoroTimer::start()
 	if (_state == Running)
 		return;
 
-	// Starting from a session that already ran out means starting it over.
+	for (int i = 0; i < 3; ++i)
+	{
+		if (i != _mode && _modeStates[i].state == Running)
+		{
+			_modeStates[i].state = Idle;
+			_modeStates[i].consumedMs = 0;
+		}
+	}
+
 	if (_remainingMs <= 0)
 		applyMode(_mode);
 
-	_elapsed.start();
+	_modeStates[_mode].elapsed.start();
+	_modeStates[_mode].state = Running;
+
 	_tickTimer.start();
 
 	setState(Running);
@@ -177,8 +203,18 @@ void	PomodoroTimer::pause()
 	if (_state != Running)
 		return;
 
-	_consumedMs += _elapsed.elapsed();
-	_tickTimer.stop();
+	_modeStates[_mode].consumedMs += _modeStates[_mode].elapsed.elapsed();
+	_modeStates[_mode].state = Paused;
+
+	bool	anyRunning = false;
+	for (int i = 0; i < 3; ++i)
+	{
+		if (_modeStates[i].state == Running)
+			anyRunning = true;
+	}
+
+	if (!anyRunning)
+		_tickTimer.stop();
 
 	setState(Paused);
 	refresh();
@@ -194,38 +230,77 @@ void	PomodoroTimer::toggle()
 
 void	PomodoroTimer::reset()
 {
-	_tickTimer.stop();
+	_modeStates[_mode].state = Idle;
+	_modeStates[_mode].consumedMs = 0;
 
-	setState(Idle);
+	bool	anyRunning = false;
+	for (int i = 0; i < 3; ++i)
+	{
+		if (_modeStates[i].state == Running)
+			anyRunning = true;
+	}
+
+	if (!anyRunning)
+		_tickTimer.stop();
+
 	applyMode(_mode);
 }
 
 void	PomodoroTimer::skip()
 {
-	// A skipped session was not completed, so it does not count towards a long break.
-	setMode(nextMode());
+	Mode	next = nextMode();
+
+	_modeStates[_mode].state = Idle;
+	_modeStates[_mode].consumedMs = 0;
+
+	_modeStates[next].state = Idle;
+	_modeStates[next].consumedMs = 0;
+	_modeStates[next].totalMs = static_cast<qint64>(minutesFor(next)) * 60 * 1000;
+
+	bool	anyRunning = false;
+	for (int i = 0; i < 3; ++i)
+	{
+		if (_modeStates[i].state == Running)
+			anyRunning = true;
+	}
+
+	if (!anyRunning)
+		_tickTimer.stop();
+
+	_mode = next;
+	emit modeChanged();
+
+	applyMode(next);
 }
 
 void	PomodoroTimer::setMode(Mode mode)
 {
-	_tickTimer.stop();
-	setState(Idle);
+	if (_mode == mode)
+		return;
 
-	if (_mode != mode)
-	{
-		_mode = mode;
-		emit modeChanged();
-	}
+	_mode = mode;
+	emit modeChanged();
 
-	applyMode(mode);
+	restoreMode(mode);
 }
 
 void	PomodoroTimer::onTick()
 {
-	refresh();
+	for (int i = 0; i < 3; ++i)
+	{
+		if (_modeStates[i].state == Running)
+		{
+			qint64	consumed = _modeStates[i].consumedMs + _modeStates[i].elapsed.elapsed();
 
-	if (_remainingMs <= 0)
-		finishSession();
+			if (consumed >= _modeStates[i].totalMs)
+			{
+				finishSession(static_cast<Mode>(i));
+				return;
+			}
+		}
+	}
+
+	refresh();
 }
 
 int	PomodoroTimer::minutesFor(Mode mode) const
@@ -262,11 +337,33 @@ void	PomodoroTimer::setState(State state)
 	emit stateChanged();
 }
 
+void	PomodoroTimer::restoreMode(Mode mode)
+{
+	ModeState	&ms = _modeStates[mode];
+
+	if (ms.state == Idle)
+	{
+		applyMode(mode);
+		return;
+	}
+
+	if (_totalMs != ms.totalMs)
+	{
+		_totalMs = ms.totalMs;
+		emit totalSecondsChanged();
+	}
+
+	setState(ms.state);
+	refresh();
+}
+
 void	PomodoroTimer::applyMode(Mode mode)
 {
 	qint64	total = static_cast<qint64>(minutesFor(mode)) * 60 * 1000;
 
-	_consumedMs = 0;
+	_modeStates[mode].totalMs = total;
+	_modeStates[mode].consumedMs = 0;
+	_modeStates[mode].state = Idle;
 
 	if (_totalMs != total)
 	{
@@ -274,15 +371,16 @@ void	PomodoroTimer::applyMode(Mode mode)
 		emit totalSecondsChanged();
 	}
 
+	setState(Idle);
 	refresh();
 }
 
 void	PomodoroTimer::refresh()
 {
-	qint64	consumed = _consumedMs;
+	qint64	consumed = _modeStates[_mode].consumedMs;
 
-	if (_state == Running)
-		consumed += _elapsed.elapsed();
+	if (_modeStates[_mode].state == Running)
+		consumed += _modeStates[_mode].elapsed.elapsed();
 
 	qint64	remaining = qMax<qint64>(0, _totalMs - consumed);
 
@@ -304,14 +402,12 @@ void	PomodoroTimer::refresh()
 	}
 }
 
-void	PomodoroTimer::finishSession()
+void	PomodoroTimer::finishSession(Mode finished)
 {
-	Mode	finished = _mode;
+	int		durationSeconds = static_cast<int>(_modeStates[finished].totalMs / 1000);
 
-	// Read before setMode re-arms the clock for the next session.
-	int		durationSeconds = static_cast<int>(_totalMs / 1000);
-
-	_tickTimer.stop();
+	_modeStates[finished].state = Idle;
+	_modeStates[finished].consumedMs = 0;
 
 	if (finished == Focus)
 	{
@@ -320,15 +416,44 @@ void	PomodoroTimer::finishSession()
 	}
 
 	Mode	next = nextMode();
-
-	setMode(next);
-
-	// Announced before anything auto starts, so a listener sees the finished session
-	// settled at the top of the next one rather than already counting down.
-	emit sessionFinished(finished, next, durationSeconds);
-
 	bool	autoStart = (next == Focus) ? _autoStartFocus : _autoStartBreaks;
 
-	if (autoStart)
-		start();
+	if (_mode == finished)
+	{
+		_mode = next;
+		emit modeChanged();
+
+		applyMode(next);
+
+		emit sessionFinished(finished, next, durationSeconds);
+
+		if (autoStart)
+			start();
+	}
+	else
+	{
+		_modeStates[next].state = Idle;
+		_modeStates[next].totalMs = static_cast<qint64>(minutesFor(next)) * 60 * 1000;
+		_modeStates[next].consumedMs = 0;
+
+		emit sessionFinished(finished, next, durationSeconds);
+
+		if (autoStart)
+		{
+			_modeStates[next].elapsed.start();
+			_modeStates[next].state = Running;
+		}
+
+		bool	anyRunning = false;
+		for (int i = 0; i < 3; ++i)
+		{
+			if (_modeStates[i].state == Running)
+				anyRunning = true;
+		}
+
+		if (!anyRunning)
+			_tickTimer.stop();
+
+		refresh();
+	}
 }

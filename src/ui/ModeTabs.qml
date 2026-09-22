@@ -65,6 +65,7 @@ Row
 
 			onClicked:
 			{
+				if (tabBtn.current) return
 				SoundPlayer.playClick()
 				rootTabs.timer.setMode(tabBtn.modelData.mode)
 			}
