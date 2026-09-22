@@ -115,8 +115,15 @@ class PomodoroTimer : public QObject
 	private:
 		static constexpr int	TickIntervalMs = 250;
 
+		struct ModeState
+		{
+			State			state		= Idle;
+			qint64			totalMs		= 0;
+			qint64			consumedMs	= 0;
+			QElapsedTimer	elapsed;
+		};
+
 		QTimer			_tickTimer;
-		QElapsedTimer	_elapsed;
 
 		Mode	_mode = Focus;
 		State	_state = Idle;
@@ -131,11 +138,9 @@ class PomodoroTimer : public QObject
 
 		int		_completedRounds = 0;
 
-		// The session clock is kept in milliseconds and derived from _elapsed rather
-		// than counted down one tick at a time, so a long session cannot accumulate
-		// the drift a plain "remaining -= 1" timer would.
+		ModeState	_modeStates[3];
+
 		qint64	_totalMs = 0;
-		qint64	_consumedMs = 0;
 		qint64	_remainingMs = 0;
 		int		_remainingSeconds = 0;
 
@@ -143,9 +148,10 @@ class PomodoroTimer : public QObject
 		Mode	nextMode() const;
 
 		void	setState(State state);
+		void	restoreMode(Mode mode);
 		void	applyMode(Mode mode);
 		void	refresh();
-		void	finishSession();
+		void	finishSession(Mode finished);
 };
 
 #endif
