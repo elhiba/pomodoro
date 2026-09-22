@@ -49,11 +49,10 @@ Item
 	{
 		id: drawer
 
-		width: Math.min(360, rootPanel.width * 0.9)
+		width: Math.min(380, rootPanel.width * 0.9)
 		height: rootPanel.height
 
-		// Parked just past the right edge when closed.
-		x: rootPanel.open ? rootPanel.width - width : rootPanel.width
+		x: rootPanel.open ? 0 : -width
 
 		Behavior on x
 		{

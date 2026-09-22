@@ -23,15 +23,23 @@ Item
 	Text
 	{
 		anchors.left: parent.left
+		anchors.right: stepper.left
+		anchors.rightMargin: 8
 		anchors.verticalCenter: parent.verticalCenter
 
 		text: rootSetting.label
 		color: "white"
 		font.pixelSize: 15
+		wrapMode: Text.WordWrap
+		elide: Text.ElideRight
+		maximumLineCount: 2
+		verticalAlignment: Text.AlignVCenter
 	}
 
 	Row
 	{
+		id: stepper
+
 		anchors.right: parent.right
 		anchors.verticalCenter: parent.verticalCenter
 
