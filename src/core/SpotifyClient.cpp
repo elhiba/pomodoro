@@ -560,6 +560,34 @@ void	SpotifyClient::playOn(const QString &uri, const QString &deviceId)
 			return;
 		}
 
+		// "Restriction violated" is Spotify refusing a command that would change nothing, or
+		// that it cannot carry out from where the player is. Look at the player before
+		// calling it a failure: if it is playing, what was wanted has happened.
+		if (status == 403 && reply.value(QStringLiteral("error")).toObject()
+			.value(QStringLiteral("reason")).toString() != QLatin1String("PREMIUM_REQUIRED"))
+		{
+			api("GET", QStringLiteral("/v1/me/player"), QJsonObject(),
+				[this, uri, status, reply](int playerStatus, const QJsonObject &player, const QString &)
+				{
+					if (playerStatus == 200 && player.value(QStringLiteral("is_playing")).toBool())
+					{
+						emit playbackStarted();
+						poll();
+						return;
+					}
+
+					// Asked to resume, and there is nothing to resume.
+					if (uri.isEmpty())
+					{
+						emit playbackFailed(QStringLiteral("Spotify has nothing to resume. Pick something to play in the music panel."));
+						return;
+					}
+
+					emit playbackFailed(reasonFor(status, reply));
+				});
+			return;
+		}
+
 		emit playbackFailed(status > 0 ? reasonFor(status, reply) : error);
 	});
 }
@@ -634,6 +662,17 @@ void	SpotifyClient::api(const QByteArray &verb, const QString &path, const QJson
 			return;
 		}
 
+		// Enough to tell what Spotify objected to, and nothing that identifies the account:
+		// the path, the status and Spotify's own error text. Never the token.
+		if (status >= 400 || status == 0)
+		{
+			QJsonObject	error = answer.value(QStringLiteral("error")).toObject();
+
+			qInfo("pomodoro: spotify %s %s -> %d %s %s", verb.constData(), qPrintable(path.section(QLatin1Char('?'), 0, 0)),
+				status, qPrintable(error.value(QStringLiteral("reason")).toString()),
+				qPrintable(error.value(QStringLiteral("message")).toString()));
+		}
+
 		handler(status, answer, status == 0 ? QStringLiteral("Could not reach Spotify") : QString());
 	});
 }
@@ -643,7 +682,11 @@ QString	SpotifyClient::reasonFor(int status, const QJsonObject &body)
 	QJsonObject	error = body.value(QStringLiteral("error")).toObject();
 	QString		reason = error.value(QStringLiteral("reason")).toString();
 
-	if (reason == QLatin1String("PREMIUM_REQUIRED") || status == 403)
+	// Only this reason means the account. Spotify answers 403 for plenty of other things
+	// -- "Restriction violated" when the player is already doing what was asked, or has
+	// nothing loaded to resume -- and calling all of them a Premium problem once told a
+	// Premium user they were not.
+	if (reason == QLatin1String("PREMIUM_REQUIRED"))
 		return QStringLiteral("Spotify only lets other apps control playback on a Premium account.");
 
 	if (reason == QLatin1String("NO_ACTIVE_DEVICE"))
