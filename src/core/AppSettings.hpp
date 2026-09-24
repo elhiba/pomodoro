@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QSettings>
 #include <QString>
+#include <QStringList>
 #include <QVariant>
 
 #include <QtQml/qqmlregistration.h>
@@ -44,6 +45,13 @@ class AppSettings : public QObject
 	// Whether the task list is offered at all. Off hides its button, drawer and the line
 	// under the timer; the tasks themselves are kept.
 	Q_PROPERTY(bool tasksEnabled READ tasksEnabled WRITE setTasksEnabled NOTIFY tasksEnabledChanged)
+	// Where the music comes from, and each source's own choice, kept separately so that
+	// switching between them does not lose any.
+	Q_PROPERTY(QString musicSource READ musicSource WRITE setMusicSource NOTIFY musicSourceChanged)
+	Q_PROPERTY(QString radioUrl READ radioUrl WRITE setRadioUrl NOTIFY radioUrlChanged)
+	Q_PROPERTY(QString youtubeUrl READ youtubeUrl WRITE setYoutubeUrl NOTIFY youtubeUrlChanged)
+	Q_PROPERTY(QString spotifyUri READ spotifyUri WRITE setSpotifyUri NOTIFY spotifyUriChanged)
+	Q_PROPERTY(QString spotifyClientId READ spotifyClientId WRITE setSpotifyClientId NOTIFY spotifyClientIdChanged)
 
 	// Handy for the settings panel, so the bounds live in one place instead of
 	// being repeated in QML.
@@ -81,6 +89,11 @@ class AppSettings : public QObject
 		// The owner's own lo-fi stream, carried over from the settings menu they wrote
 		// before the QML rewrite.
 		static const QString	&defaultStreamUrl();
+		static const QString	&defaultYoutubeUrl();
+
+		// "radio", "youtube", "spotify", "custom": which of the music settings below is
+		// the one playing. The custom link is streamUrl, kept under its old name.
+		static const QStringList	&musicSources();
 
 		explicit AppSettings(QObject *parent = nullptr);
 		~AppSettings() override;
@@ -101,6 +114,11 @@ class AppSettings : public QObject
 		int		miniTimerX() const;
 		int		miniTimerY() const;
 		bool	tasksEnabled() const;
+		QString	musicSource() const;
+		QString	radioUrl() const;
+		QString	youtubeUrl() const;
+		QString	spotifyUri() const;
+		QString	spotifyClientId() const;
 
 		int		minimumMinutes() const;
 		int		maximumMinutes() const;
@@ -123,6 +141,11 @@ class AppSettings : public QObject
 		void	setMiniTimerX(int value);
 		void	setMiniTimerY(int value);
 		void	setTasksEnabled(bool value);
+		void	setMusicSource(const QString &value);
+		void	setRadioUrl(const QString &url);
+		void	setYoutubeUrl(const QString &url);
+		void	setSpotifyUri(const QString &url);
+		void	setSpotifyClientId(const QString &url);
 
 	public slots:
 		void	restoreDefaults();
@@ -144,6 +167,11 @@ class AppSettings : public QObject
 		void	miniTimerXChanged();
 		void	miniTimerYChanged();
 		void	tasksEnabledChanged();
+		void	musicSourceChanged();
+		void	radioUrlChanged();
+		void	youtubeUrlChanged();
+		void	spotifyUriChanged();
+		void	spotifyClientIdChanged();
 
 	private:
 		QSettings	_store;
@@ -165,6 +193,11 @@ class AppSettings : public QObject
 		int		_miniTimerX = DefaultMiniTimerX;
 		int		_miniTimerY = DefaultMiniTimerY;
 		bool	_tasksEnabled = DefaultTasksEnabled;
+		QString	_musicSource;
+		QString	_radioUrl;
+		QString	_youtubeUrl;
+		QString	_spotifyUri;
+		QString	_spotifyClientId;
 
 		void	load();
 		void	store(const char *key, const QVariant &value);

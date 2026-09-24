@@ -128,11 +128,39 @@ Window
 		value: AppSettings.alarmVolume
 	}
 
+	// Whichever source is picked in the settings, as the one string MusicPlayer takes: a
+	// stream URL, a YouTube link, or "spotify:" plus the URI to start ("spotify:" alone
+	// resumes whatever Spotify last played).
+	readonly property string musicSource:
+	{
+		switch (AppSettings.musicSource)
+		{
+			case "youtube":
+				return AppSettings.youtubeUrl
+			case "spotify":
+				return AppSettings.spotifyUri.length > 0 ? AppSettings.spotifyUri : "spotify:"
+			case "custom":
+				return AppSettings.streamUrl
+			default:
+				return AppSettings.radioUrl
+		}
+	}
+
 	Binding
 	{
 		target: MusicPlayer
 		property: "source"
-		value: AppSettings.streamUrl
+		value: mainWindow.musicSource
+	}
+
+	// The user's own Client ID wins over the one the build carries.
+	Binding
+	{
+		target: MusicPlayer.spotify
+		property: "clientId"
+		value: AppSettings.spotifyClientId.length > 0
+			? AppSettings.spotifyClientId
+			: MusicPlayer.spotify.builtInClientId
 	}
 
 	Binding

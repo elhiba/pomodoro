@@ -12,7 +12,9 @@
 #include <QtQml/qqmlregistration.h>
 
 #include "MediaControls.hpp"
+#include "SpotifyClient.hpp"
 #include "StreamMetadata.hpp"
+#include "YtDlp.hpp"
 
 // The background stream. QMediaPlayer here rather than QSoundEffect: this is a
 // compressed network stream of unbounded length, the opposite of the short PCM cues
@@ -36,6 +38,14 @@
 // answer to "is the stream still there", and a run of failed probes is what triggers a
 // reconnect. To avoid punishing a server that refuses a second listener, probe failures
 // only count once at least one probe has succeeded, proving the server allows it.
+//
+// The source decides where the sound comes from, and the rest of the app never needs to
+// know which it is:
+//   * a stream URL (the radio list or a custom link) plays here as described above;
+//   * a YouTube link is first turned into a direct audio URL by yt-dlp, again on every
+//     (re)connect because those URLs expire, and then plays here the same way;
+//   * "spotify:" or "spotify:<uri>" is handed to SpotifyClient, which drives the user's
+//     own Spotify player -- the sound comes out of Spotify, not this process.
 class MusicPlayer : public QObject
 {
 	Q_OBJECT
@@ -50,6 +60,11 @@ class MusicPlayer : public QObject
 	Q_PROPERTY(bool failed READ failed NOTIFY statusChanged)
 	Q_PROPERTY(bool reconnecting READ reconnecting NOTIFY statusChanged)
 	Q_PROPERTY(int retryAttempt READ retryAttempt NOTIFY statusChanged)
+
+	// The helpers behind the YouTube and Spotify sources, for the settings panel.
+	Q_PROPERTY(YtDlp *youtube READ youtube CONSTANT)
+	Q_PROPERTY(SpotifyClient *spotify READ spotify CONSTANT)
+	Q_PROPERTY(SourceKind sourceKind READ sourceKind NOTIFY sourceChanged)
 
 	// What the stream says is on. Empty until it has said anything.
 	Q_PROPERTY(QString stationName READ stationName NOTIFY nowPlayingChanged)
@@ -68,6 +83,14 @@ class MusicPlayer : public QObject
 		};
 		Q_ENUM(Status)
 
+		enum SourceKind
+		{
+			Stream,
+			YouTube,
+			Spotify
+		};
+		Q_ENUM(SourceKind)
+
 		explicit MusicPlayer(QObject *parent = nullptr);
 
 		QString	source() const;
@@ -84,6 +107,10 @@ class MusicPlayer : public QObject
 		QString	stationName() const;
 		QString	genre() const;
 		QString	title() const;
+
+		YtDlp			*youtube() const;
+		SpotifyClient	*spotify() const;
+		SourceKind		sourceKind() const;
 
 		void	setSource(const QString &source);
 		void	setVolume(qreal volume);
@@ -111,11 +138,19 @@ class MusicPlayer : public QObject
 		void	onProbeFailed();
 		void	onReachabilityChanged(QNetworkInformation::Reachability reachability);
 		void	onMetadataChanged();
+		void	onYouTubeResolved(const QUrl &stream, const QString &title, const QString &channel, bool live);
+		void	onYouTubeFailed(const QString &reason);
+		void	onSpotifyStarted();
+		void	onSpotifyFailed(const QString &reason);
 
 	private:
 		// Long enough for a slow connection to a live stream, short enough that a dead
 		// host does not leave the UI pretending it is about to work.
 		static constexpr int	WatchdogMs = 20000;
+
+		// How long yt-dlp gets to turn a YouTube link into a stream. Its first run on a
+		// machine unpacks itself, which can take several seconds on its own.
+		static constexpr int	YouTubeResolveMs = 60000;
 
 		// The reconnect delay doubles from the first to the cap: 2, 4, 8, 16, 30, 30...
 		// Quick enough that a blip is barely audible, slow enough not to hammer a server
@@ -144,6 +179,19 @@ class MusicPlayer : public QObject
 
 		StreamMetadata	_metadata;
 		MediaControls	*_controls = nullptr;
+		YtDlp			*_ytDlp = nullptr;
+		SpotifyClient	*_spotify = nullptr;
+
+		SourceKind	_kind = Stream;
+
+		// A YouTube source's live flag, from the last resolve. A video that is not live
+		// reaching its end simply starts again; a live stream ending is a dropped
+		// connection like any other.
+		bool	_youtubeLive = false;
+
+		// The Spotify context last started, so that pressing play after a pause resumes
+		// where it was instead of starting the playlist over.
+		QString	_spotifyStarted;
 
 		QString	_source;
 		qreal	_volume = 0.5;
@@ -173,6 +221,7 @@ class MusicPlayer : public QObject
 		void	refreshStatus();
 		void	rebuildPlayer();
 		void	openStream();
+		void	startPlayer(const QUrl &url);
 		void	scheduleRetry(const QString &reason);
 		void	cancelRetry();
 		void	updateNowPlaying();

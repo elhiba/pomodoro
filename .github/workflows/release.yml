@@ -17,6 +17,10 @@ permissions:
 env:
   QT_VERSION: 6.6.3
 
+# vars.SPOTIFY_CLIENT_ID (Settings -> Secrets and variables -> Actions -> Variables) is the
+# Spotify app the release signs in as. A Client ID is public by design; leaving the variable
+# unset just means users enter their own in the app.
+
 jobs:
   linux:
     name: Linux AppImage
@@ -46,7 +50,7 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOMODORO_VERSION=${{ github.ref_name }} -DCMAKE_INSTALL_PREFIX=/usr
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOMODORO_VERSION=${{ github.ref_name }} -DPOMODORO_SPOTIFY_CLIENT_ID=${{ vars.SPOTIFY_CLIENT_ID }} -DCMAKE_INSTALL_PREFIX=/usr
           cmake --build build --parallel
 
       - name: Stage AppDir
@@ -109,7 +113,7 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOMODORO_VERSION=${{ github.ref_name }}
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOMODORO_VERSION=${{ github.ref_name }} -DPOMODORO_SPOTIFY_CLIENT_ID=${{ vars.SPOTIFY_CLIENT_ID }}
           cmake --build build --parallel
 
       - name: Deploy Qt runtime
@@ -220,7 +224,7 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOMODORO_VERSION=${{ github.ref_name }}
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOMODORO_VERSION=${{ github.ref_name }} -DPOMODORO_SPOTIFY_CLIENT_ID=${{ vars.SPOTIFY_CLIENT_ID }}
           cmake --build build --parallel
 
       - name: Deploy Qt runtime and build dmg

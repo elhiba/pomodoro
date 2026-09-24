@@ -100,6 +100,12 @@ qt_add_executable(pomodoro
 
 	src/core/TaskList.hpp
 	src/core/TaskList.cpp
+
+	src/core/YtDlp.hpp
+	src/core/YtDlp.cpp
+
+	src/core/SpotifyClient.hpp
+	src/core/SpotifyClient.cpp
 )
 
 # The OS media-control bridge is the one part of the app with a different body per
@@ -164,6 +170,12 @@ endif()
 # main.cpp hands this to QApplication, which is where the About section and the update
 # check read it from.
 target_compile_definitions(pomodoro PRIVATE POMODORO_VERSION_STRING="${PROJECT_VERSION}")
+
+# The Spotify app this build signs in as. A Client ID is not a secret -- PKCE needs none --
+# so it can be passed in from a repository variable at release time. Empty means every user
+# enters their own in the settings.
+set(POMODORO_SPOTIFY_CLIENT_ID "" CACHE STRING "Spotify Client ID built into the app (optional)")
+target_compile_definitions(pomodoro PRIVATE POMODORO_SPOTIFY_CLIENT_ID="${POMODORO_SPOTIFY_CLIENT_ID}")
 
 # qmltyperegistrar generates #include "PomodoroTimer.hpp" for the QML_ELEMENT types,
 # so src/core has to be on the include path.

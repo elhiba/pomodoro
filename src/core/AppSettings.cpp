@@ -22,6 +22,29 @@ namespace
 	const char *const	KeyMiniTimerX = "window/miniTimerX";
 	const char *const	KeyMiniTimerY = "window/miniTimerY";
 	const char *const	KeyTasksEnabled = "tasks/enabled";
+	const char *const	KeyMusicSource = "music/source";
+	const char *const	KeyRadioUrl = "music/radioUrl";
+	const char *const	KeyYoutubeUrl = "music/youtubeUrl";
+	const char *const	KeySpotifyUri = "music/spotifyUri";
+	const char *const	KeySpotifyClientId = "spotify/clientId";
+}
+
+const QStringList	&AppSettings::musicSources()
+{
+	static const QStringList	sources = {
+		QStringLiteral("radio"), QStringLiteral("youtube"),
+		QStringLiteral("spotify"), QStringLiteral("custom")
+	};
+
+	return sources;
+}
+
+const QString	&AppSettings::defaultYoutubeUrl()
+{
+	// Lofi Girl's channel, which always points at whichever stream it has live.
+	static const QString	url = QStringLiteral("https://www.youtube.com/@LofiGirl/live");
+
+	return url;
 }
 
 const QString	&AppSettings::defaultStreamUrl()
@@ -122,6 +145,31 @@ int	AppSettings::miniTimerY() const
 bool	AppSettings::tasksEnabled() const
 {
 	return _tasksEnabled;
+}
+
+QString	AppSettings::musicSource() const
+{
+	return _musicSource;
+}
+
+QString	AppSettings::radioUrl() const
+{
+	return _radioUrl;
+}
+
+QString	AppSettings::youtubeUrl() const
+{
+	return _youtubeUrl;
+}
+
+QString	AppSettings::spotifyUri() const
+{
+	return _spotifyUri;
+}
+
+QString	AppSettings::spotifyClientId() const
+{
+	return _spotifyClientId;
 }
 
 int	AppSettings::minimumMinutes() const
@@ -334,6 +382,69 @@ void	AppSettings::setTasksEnabled(bool value)
 	emit tasksEnabledChanged();
 }
 
+void	AppSettings::setMusicSource(const QString &value)
+{
+	if (_musicSource == value || !musicSources().contains(value))
+		return;
+
+	_musicSource = value;
+	store(KeyMusicSource, value);
+
+	emit musicSourceChanged();
+}
+
+void	AppSettings::setRadioUrl(const QString &url)
+{
+	QString	value = url.trimmed();
+
+	if (_radioUrl == value)
+		return;
+
+	_radioUrl = value;
+	store(KeyRadioUrl, value);
+
+	emit radioUrlChanged();
+}
+
+void	AppSettings::setYoutubeUrl(const QString &url)
+{
+	QString	value = url.trimmed();
+
+	if (_youtubeUrl == value)
+		return;
+
+	_youtubeUrl = value;
+	store(KeyYoutubeUrl, value);
+
+	emit youtubeUrlChanged();
+}
+
+void	AppSettings::setSpotifyUri(const QString &url)
+{
+	QString	value = url.trimmed();
+
+	if (_spotifyUri == value)
+		return;
+
+	_spotifyUri = value;
+	store(KeySpotifyUri, value);
+
+	emit spotifyUriChanged();
+}
+
+void	AppSettings::setSpotifyClientId(const QString &url)
+{
+	QString	value = url.trimmed();
+
+	if (_spotifyClientId == value)
+		return;
+
+	_spotifyClientId = value;
+	store(KeySpotifyClientId, value);
+
+	emit spotifyClientIdChanged();
+}
+
 void	AppSettings::restoreDefaults()
 {
 	setFocusMinutes(DefaultFocusMinutes);
@@ -350,6 +461,9 @@ void	AppSettings::restoreDefaults()
 	setCloseMinimizes(DefaultCloseMinimizes);
 	setMiniTimer(DefaultMiniTimer);
 	setTasksEnabled(DefaultTasksEnabled);
+	setMusicSource(QStringLiteral("radio"));
+	setRadioUrl(defaultStreamUrl());
+	setYoutubeUrl(defaultYoutubeUrl());
 }
 
 void	AppSettings::load()
@@ -383,6 +497,21 @@ void	AppSettings::load()
 	_miniTimerX = _store.value(KeyMiniTimerX, DefaultMiniTimerX).toInt();
 	_miniTimerY = _store.value(KeyMiniTimerY, DefaultMiniTimerY).toInt();
 	_tasksEnabled = _store.value(KeyTasksEnabled, DefaultTasksEnabled).toBool();
+	// Before there was a choice of source there was only the stream URL. Someone who had
+	// changed it keeps their link as a custom one; everyone else starts on the radio list,
+	// on the same station they were already hearing.
+	QString	legacySource = _streamUrl == defaultStreamUrl() || _streamUrl.isEmpty()
+		? QStringLiteral("radio")
+		: QStringLiteral("custom");
+
+	_musicSource = _store.value(KeyMusicSource, legacySource).toString();
+
+	if (!musicSources().contains(_musicSource))
+		_musicSource = QStringLiteral("radio");
+	_radioUrl = _store.value(KeyRadioUrl, defaultStreamUrl()).toString().trimmed();
+	_youtubeUrl = _store.value(KeyYoutubeUrl, defaultYoutubeUrl()).toString().trimmed();
+	_spotifyUri = _store.value(KeySpotifyUri, QStringLiteral("")).toString();
+	_spotifyClientId = _store.value(KeySpotifyClientId, QStringLiteral("")).toString();
 }
 
 void	AppSettings::store(const char *key, const QVariant &value)

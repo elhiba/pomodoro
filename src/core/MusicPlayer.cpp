@@ -35,6 +35,17 @@ MusicPlayer::MusicPlayer(QObject *parent)
 	connect(_controls, &MediaControls::pauseRequested, this, &MusicPlayer::pause);
 	connect(_controls, &MediaControls::toggleRequested, this, &MusicPlayer::toggle);
 	connect(_controls, &MediaControls::stopRequested, this, &MusicPlayer::stop);
+
+	_ytDlp = new YtDlp(this);
+
+	connect(_ytDlp, &YtDlp::resolved, this, &MusicPlayer::onYouTubeResolved);
+	connect(_ytDlp, &YtDlp::resolveFailed, this, &MusicPlayer::onYouTubeFailed);
+
+	_spotify = new SpotifyClient(this);
+
+	connect(_spotify, &SpotifyClient::playbackStarted, this, &MusicPlayer::onSpotifyStarted);
+	connect(_spotify, &SpotifyClient::playbackFailed, this, &MusicPlayer::onSpotifyFailed);
+	connect(_spotify, &SpotifyClient::nowPlayingChanged, this, &MusicPlayer::updateNowPlaying);
 }
 
 QString	MusicPlayer::source() const
@@ -98,8 +109,26 @@ int	MusicPlayer::retryAttempt() const
 	return _retryAttempt;
 }
 
+YtDlp	*MusicPlayer::youtube() const
+{
+	return _ytDlp;
+}
+
+SpotifyClient	*MusicPlayer::spotify() const
+{
+	return _spotify;
+}
+
+MusicPlayer::SourceKind	MusicPlayer::sourceKind() const
+{
+	return _kind;
+}
+
 QString	MusicPlayer::stationName() const
 {
+	if (_kind == Spotify)
+		return _spotify->artist();
+
 	if (!_metadata.stationName().isEmpty())
 		return _metadata.stationName();
 
@@ -108,11 +137,23 @@ QString	MusicPlayer::stationName() const
 
 QString	MusicPlayer::genre() const
 {
-	return _metadata.genre();
+	switch (_kind)
+	{
+		case Spotify:
+			return QStringLiteral("Spotify");
+		case YouTube:
+			return _youtubeLive ? QStringLiteral("YouTube live") : QStringLiteral("YouTube");
+		case Stream:
+		default:
+			return _metadata.genre();
+	}
 }
 
 QString	MusicPlayer::title() const
 {
+	if (_kind == Spotify)
+		return _spotify->track();
+
 	QString	title = _metadata.title().isEmpty() ? _backendTitle : _metadata.title();
 	QString	station = stationName();
 
@@ -134,12 +175,25 @@ void	MusicPlayer::setSource(const QString &source)
 	if (_source == trimmed)
 		return;
 
-	_source = trimmed;
-
 	// Changing the stream out from under a playing one starts the new one instead.
+	// Stopped before the source changes, so it is the old kind of source that is stopped.
 	bool	wasPlaying = _wantsPlayback;
 
 	stop();
+
+	_source = trimmed;
+	_spotifyStarted.clear();
+	_youtubeLive = false;
+
+	if (_source.startsWith(QLatin1String("spotify:")))
+		_kind = Spotify;
+	else if (YtDlp::handles(QUrl(_source)))
+	{
+		_kind = YouTube;
+		_ytDlp->updateIfStale();
+	}
+	else
+		_kind = Stream;
 
 	// Deliberately NOT handed to QMediaPlayer here. The FFmpeg backend opens the URL
 	// as soon as it is set, to probe the format, which would connect to the stream on
@@ -174,6 +228,25 @@ void	MusicPlayer::play()
 		return;
 	}
 
+	// Spotify plays in Spotify: this only asks it to. There is no connection here to
+	// retry, so a refusal is final until the user presses play again.
+	if (_kind == Spotify)
+	{
+		if (_wantsPlayback)
+			return;
+
+		_wantsPlayback = true;
+		setStatus(Connecting);
+
+		// "spotify:" alone means whatever Spotify last had; anything longer is a URI to
+		// start. Once started, play means resume rather than start the playlist over.
+		QString	uri = _source == QLatin1String("spotify:") ? QString() : _source;
+
+		_spotify->play(uri == _spotifyStarted ? QString() : uri);
+		_spotifyStarted = uri;
+		return;
+	}
+
 	QUrl	url(_source);
 
 	if (!url.isValid() || url.scheme().isEmpty())
@@ -205,6 +278,17 @@ void	MusicPlayer::pause()
 
 	_wantsPlayback = false;
 
+	if (_kind == Spotify)
+	{
+		_spotify->pause();
+		_spotify->setPolling(false);
+
+		setStatus(Paused);
+		return;
+	}
+
+	_ytDlp->cancel();
+
 	_watchdog.stop();
 	cancelRetry();
 	_metadata.stop();
@@ -228,6 +312,16 @@ void	MusicPlayer::toggle()
 
 void	MusicPlayer::stop()
 {
+	if (_kind == Spotify)
+	{
+		if (_wantsPlayback)
+			_spotify->pause();
+
+		_spotify->setPolling(false);
+	}
+
+	_ytDlp->cancel();
+
 	_wantsPlayback = false;
 	_retryAttempt = 0;
 
@@ -271,6 +365,11 @@ void	MusicPlayer::onErrorOccurred(QMediaPlayer::Error error, const QString &mess
 // only fills in when it has not spoken yet.
 void	MusicPlayer::onBackendMetaDataChanged()
 {
+	// yt-dlp already said what a YouTube source is; whatever the HLS segments carry is
+	// less than that.
+	if (_kind == YouTube)
+		return;
+
 	QMediaMetaData	meta = _player->metaData();
 
 	QString	title = meta.stringValue(QMediaMetaData::Title).trimmed();
@@ -350,6 +449,64 @@ void	MusicPlayer::onMetadataChanged()
 	updateNowPlaying();
 }
 
+void	MusicPlayer::onYouTubeResolved(const QUrl &stream, const QString &title, const QString &channel, bool live)
+{
+	if (!_wantsPlayback || _retryPending || _kind != YouTube)
+		return;
+
+	_backendTitle = title;
+	_backendStation = channel;
+	_youtubeLive = live;
+
+	updateNowPlaying();
+	startPlayer(stream);
+}
+
+// A link that is wrong stays wrong however often it is retried -- a private video, a typo,
+// no yt-dlp. Only a failure that looks like the network is worth another attempt.
+void	MusicPlayer::onYouTubeFailed(const QString &reason)
+{
+	if (!_wantsPlayback || _retryPending)
+		return;
+
+	bool	transient = networkLooksDown()
+		|| reason.contains(QLatin1String("timed out"), Qt::CaseInsensitive)
+		|| reason.contains(QLatin1String("Unable to download"), Qt::CaseInsensitive)
+		|| reason.contains(QLatin1String("Temporary"), Qt::CaseInsensitive);
+
+	if (transient)
+	{
+		scheduleRetry(reason);
+		return;
+	}
+
+	_wantsPlayback = false;
+	_watchdog.stop();
+
+	setStatus(Failed, reason);
+}
+
+void	MusicPlayer::onSpotifyStarted()
+{
+	if (!_wantsPlayback || _kind != Spotify)
+		return;
+
+	setStatus(Playing);
+	_spotify->setPolling(true);
+}
+
+void	MusicPlayer::onSpotifyFailed(const QString &reason)
+{
+	if (!_wantsPlayback || _kind != Spotify)
+		return;
+
+	// Nothing started, so the next press should start the chosen playlist again.
+	_wantsPlayback = false;
+	_spotifyStarted.clear();
+
+	setStatus(Failed, reason);
+}
+
 void	MusicPlayer::setStatus(Status status, const QString &errorText)
 {
 	if (_status == status && _errorText == errorText)
@@ -376,6 +533,14 @@ void	MusicPlayer::refreshStatus()
 		return;
 
 	QMediaPlayer::MediaStatus	media = _player->mediaStatus();
+
+	// A YouTube video that is not a live stream has simply finished; start it again, the
+	// way a background track is expected to loop.
+	if (media == QMediaPlayer::EndOfMedia && _kind == YouTube && !_youtubeLive)
+	{
+		openStream();
+		return;
+	}
 
 	// A live stream is not supposed to end. When one does, the connection dropped.
 	if (media == QMediaPlayer::EndOfMedia)
@@ -410,7 +575,12 @@ void	MusicPlayer::refreshStatus()
 		_retryAttempt = 0;
 
 		setStatus(Playing);
-		_metadata.start(QUrl(_source));
+
+		// The ICY reader and its liveness probe speak to radio servers. Pointed at a
+		// YouTube page they would only download HTML every few seconds.
+		if (_kind == Stream)
+			_metadata.start(QUrl(_source));
+
 		return;
 	}
 
@@ -463,11 +633,6 @@ void	MusicPlayer::openStream()
 	// carries across, since that does not change between one attempt and the next.
 	_probeFailures = 0;
 
-	// A pristine player, then the URL. This is the reconnect: the old connection and
-	// everything it had buffered are gone with the old player.
-	rebuildPlayer();
-	_player->setSource(QUrl(_source));
-
 	// The reason for the last drop rides along while reconnecting; a fresh start has
 	// nothing to explain.
 	if (_retryAttempt > 0)
@@ -475,7 +640,27 @@ void	MusicPlayer::openStream()
 	else
 		setStatus(Connecting);
 
-	_watchdog.start();
+	// A YouTube link is only a page; yt-dlp finds the audio behind it first, and
+	// startPlayer() follows from onYouTubeResolved(). Resolving can take a while the first
+	// time yt-dlp runs, so the watchdog gives it longer than a stream gets to start.
+	if (_kind == YouTube)
+	{
+		_watchdog.start(YouTubeResolveMs);
+		_ytDlp->resolve(QUrl(_source));
+		return;
+	}
+
+	startPlayer(QUrl(_source));
+}
+
+void	MusicPlayer::startPlayer(const QUrl &url)
+{
+	// A pristine player, then the URL. This is the reconnect: the old connection and
+	// everything it had buffered are gone with the old player.
+	rebuildPlayer();
+	_player->setSource(url);
+
+	_watchdog.start(WatchdogMs);
 	_player->play();
 }
 
@@ -519,7 +704,10 @@ void	MusicPlayer::updateControls()
 {
 	// Listed with the desktop while the user has any interest in music: playing,
 	// trying to, or paused and able to come back. Idle and failed drop the entry.
-	bool	enabled = _wantsPlayback || _status == Paused;
+	//
+	// Never for Spotify: its own app already has the desktop's media controls, and a
+	// second entry for the same music would only be confusing.
+	bool	enabled = (_wantsPlayback || _status == Paused) && _kind != Spotify;
 
 	MediaControls::PlaybackState	state = MediaControls::Stopped;
 
