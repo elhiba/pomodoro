@@ -160,6 +160,9 @@ git tag v1.2.3
 git push origin v1.2.3
 ```
 
+The tag is the version: CMake reads it (or `-DPOMODORO_VERSION=`), so there is no version
+number to edit in the source before tagging.
+
 ## Tech stack
 
 C++17 · Qt 6 (Qt Quick / QML, Multimedia, Network, DBus, Widgets) · CMake · GitHub Actions.

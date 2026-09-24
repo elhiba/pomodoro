@@ -1,9 +1,47 @@
 cmake_minimum_required(VERSION 3.21)
 
+# The version is the release tag, and nothing else. It used to be typed into this file and
+# into main.cpp by hand, which is how v1.2.2 shipped calling itself 1.2.1 -- and then kept
+# offering its own release as an update. Now, in order of preference:
+#
+#   * -DPOMODORO_VERSION=1.2.3, which the release workflow passes from the tag it builds;
+#   * the newest v* tag reachable from HEAD, for a local build of a normal checkout;
+#   * 0.0.0, for a tarball or a shallow clone with no tags, which is honest about not
+#     knowing and will always see a published release as newer.
+#
+# safe.directory is passed on the command line because the Docker image builds a checkout
+# owned by another uid, and git refuses to read those without being told it may.
+set(POMODORO_VERSION "" CACHE STRING "Version stamped into the build; defaults to the newest v* git tag")
+
+set(POMODORO_RESOLVED_VERSION "${POMODORO_VERSION}")
+
+if(NOT POMODORO_RESOLVED_VERSION)
+	find_program(POMODORO_GIT_EXECUTABLE git)
+
+	if(POMODORO_GIT_EXECUTABLE)
+		execute_process(
+			COMMAND "${POMODORO_GIT_EXECUTABLE}" -c safe.directory=* describe --tags --match "v[0-9]*" --abbrev=0
+			WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+			OUTPUT_VARIABLE POMODORO_RESOLVED_VERSION
+			OUTPUT_STRIP_TRAILING_WHITESPACE
+			ERROR_QUIET
+		)
+	endif()
+endif()
+
+# "v1.2.3", "1.2.3" and "v1.2.3-rc1" all come down to the three numbers project() accepts.
+if(POMODORO_RESOLVED_VERSION MATCHES "([0-9]+\.[0-9]+\.[0-9]+)")
+	set(POMODORO_RESOLVED_VERSION "${CMAKE_MATCH_1}")
+else()
+	set(POMODORO_RESOLVED_VERSION "0.0.0")
+endif()
+
 project(pomodoro
-	VERSION 1.2.1
+	VERSION ${POMODORO_RESOLVED_VERSION}
 	LANGUAGES CXX
 )
+
+message(STATUS "pomodoro version ${PROJECT_VERSION}")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -119,6 +157,10 @@ else()
 		src/core/DesktopIntegrationLinux.cpp
 	)
 endif()
+
+# main.cpp hands this to QApplication, which is where the About section and the update
+# check read it from.
+target_compile_definitions(pomodoro PRIVATE POMODORO_VERSION_STRING="${PROJECT_VERSION}")
 
 # qmltyperegistrar generates #include "PomodoroTimer.hpp" for the QML_ELEMENT types,
 # so src/core has to be on the include path.

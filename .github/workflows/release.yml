@@ -46,7 +46,7 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOMODORO_VERSION=${{ github.ref_name }} -DCMAKE_INSTALL_PREFIX=/usr
           cmake --build build --parallel
 
       - name: Stage AppDir
@@ -109,7 +109,7 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOMODORO_VERSION=${{ github.ref_name }}
           cmake --build build --parallel
 
       - name: Deploy Qt runtime
@@ -220,7 +220,7 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOMODORO_VERSION=${{ github.ref_name }}
           cmake --build build --parallel
 
       - name: Deploy Qt runtime and build dmg
