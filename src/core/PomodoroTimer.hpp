@@ -145,7 +145,10 @@ class PomodoroTimer : public QObject
 		int		_remainingSeconds = 0;
 
 		int		minutesFor(Mode mode) const;
-		Mode	nextMode() const;
+		// What follows a session of the given kind. Takes the mode rather than reading
+		// _mode, because a session can finish in the background while another tab is
+		// shown, and it is the session that finished that decides what comes next.
+		Mode	nextMode(Mode after) const;
 
 		void	setState(State state);
 		void	restoreMode(Mode mode);

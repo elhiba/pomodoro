@@ -248,7 +248,7 @@ void	PomodoroTimer::reset()
 
 void	PomodoroTimer::skip()
 {
-	Mode	next = nextMode();
+	Mode	next = nextMode(_mode);
 
 	_modeStates[_mode].state = Idle;
 	_modeStates[_mode].consumedMs = 0;
@@ -317,9 +317,9 @@ int	PomodoroTimer::minutesFor(Mode mode) const
 	}
 }
 
-PomodoroTimer::Mode	PomodoroTimer::nextMode() const
+PomodoroTimer::Mode	PomodoroTimer::nextMode(Mode after) const
 {
-	if (_mode != Focus)
+	if (after != Focus)
 		return Focus;
 
 	if (_completedRounds > 0 && _completedRounds % _roundsBeforeLongBreak == 0)
@@ -415,7 +415,7 @@ void	PomodoroTimer::finishSession(Mode finished)
 		emit completedRoundsChanged();
 	}
 
-	Mode	next = nextMode();
+	Mode	next = nextMode(finished);
 	bool	autoStart = (next == Focus) ? _autoStartFocus : _autoStartBreaks;
 
 	if (_mode == finished)
@@ -432,16 +432,24 @@ void	PomodoroTimer::finishSession(Mode finished)
 	}
 	else
 	{
-		_modeStates[next].state = Idle;
-		_modeStates[next].totalMs = static_cast<qint64>(minutesFor(next)) * 60 * 1000;
-		_modeStates[next].consumedMs = 0;
+		ModeState	&upcoming = _modeStates[next];
+
+		// A session the user already has going in that slot is theirs; the one that
+		// just finished in the background has no business resetting or restarting it.
+		bool	slotIsFree = upcoming.state == Idle;
+
+		if (slotIsFree)
+		{
+			upcoming.totalMs = static_cast<qint64>(minutesFor(next)) * 60 * 1000;
+			upcoming.consumedMs = 0;
+		}
 
 		emit sessionFinished(finished, next, durationSeconds);
 
-		if (autoStart)
+		if (autoStart && slotIsFree)
 		{
-			_modeStates[next].elapsed.start();
-			_modeStates[next].state = Running;
+			upcoming.elapsed.start();
+			upcoming.state = Running;
 		}
 
 		bool	anyRunning = false;
@@ -454,6 +462,8 @@ void	PomodoroTimer::finishSession(Mode finished)
 		if (!anyRunning)
 			_tickTimer.stop();
 
-		refresh();
+		// The tab on screen may be the very one that was just re-armed or started, in
+		// which case its length and state have to be re-read, not just its countdown.
+		restoreMode(_mode);
 	}
 }

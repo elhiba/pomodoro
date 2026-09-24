@@ -21,6 +21,7 @@ class TestPomodoroTimer : public QObject
 		void	skipCyclesThroughModesWithoutCountingRounds();
 		void	setModePreservesRunningSession();
 		void	setModeSameModeIsIgnored();
+		void	backgroundFocusIsFollowedByABreak();
 		void	roundsBeforeLongBreakHasAFloor();
 		void	automationFlagsRoundTrip();
 };
@@ -193,6 +194,33 @@ void	TestPomodoroTimer::setModeSameModeIsIgnored()
 	timer.setMode(PomodoroTimer::Focus);
 	QCOMPARE(timer.state(), PomodoroTimer::Running);
 	QCOMPARE(modeChanged.count(), 0);
+}
+
+// The one test that lets a session run out, so it takes a minute of real time. It has to:
+// the bug it pins down only exists at the moment a session finishes. A focus session that
+// ends while a break tab is on screen once decided what came next from the tab being
+// viewed, and followed itself with another focus session instead of a break.
+void	TestPomodoroTimer::backgroundFocusIsFollowedByABreak()
+{
+	PomodoroTimer	timer;
+	QSignalSpy		finished(&timer, &PomodoroTimer::sessionFinished);
+
+	timer.setFocusMinutes(1);
+	timer.setAutoStartBreaks(true);
+	timer.start();
+	timer.setMode(PomodoroTimer::ShortBreak);
+
+	QVERIFY(finished.wait(70000));
+
+	QCOMPARE(finished.count(), 1);
+	QCOMPARE(finished.at(0).at(0).value<PomodoroTimer::Mode>(), PomodoroTimer::Focus);
+	QCOMPARE(finished.at(0).at(1).value<PomodoroTimer::Mode>(), PomodoroTimer::ShortBreak);
+	QCOMPARE(timer.completedRounds(), 1);
+
+	// Break auto-start is on, and the break is the tab being shown, so it is running now.
+	QCOMPARE(timer.mode(), PomodoroTimer::ShortBreak);
+	QCOMPARE(timer.state(), PomodoroTimer::Running);
+	QCOMPARE(timer.totalSeconds(), timer.shortBreakMinutes() * 60);
 }
 
 void	TestPomodoroTimer::roundsBeforeLongBreakHasAFloor()
