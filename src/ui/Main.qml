@@ -243,6 +243,17 @@ Window
 
 		timer: pomodoroTimer
 		themeColor: mainWindow.themeColor
+
+		// The same preference the settings drawer edits, so the two can never disagree.
+		onMinutesRequested: (minutes) =>
+		{
+			if (pomodoroTimer.mode === PomodoroTimer.Focus)
+				AppSettings.focusMinutes = minutes
+			else if (pomodoroTimer.mode === PomodoroTimer.ShortBreak)
+				AppSettings.shortBreakMinutes = minutes
+			else
+				AppSettings.longBreakMinutes = minutes
+		}
 	}
 
 	// Last, so the drawers and their scrims sit above everything else.
@@ -266,7 +277,7 @@ Window
 
 	// Space, R and S are single letters, so they have to stay out of the way of any
 	// text field that currently has the keyboard.
-	readonly property bool typing: settingsPanel.typing
+	readonly property bool typing: settingsPanel.typing || timerDisplay.typing
 
 	Shortcut
 	{
