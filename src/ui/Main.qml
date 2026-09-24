@@ -315,11 +315,44 @@ Window
 		}
 	}
 
+	// Whether the window was maximised before it was last minimised, so coming back from
+	// the mini timer or the tray returns it to the size it left at.
+	property bool wasMaximized: false
+
+	onVisibilityChanged:
+	{
+		if (mainWindow.visibility === Window.Maximized)
+			mainWindow.wasMaximized = true
+		else if (mainWindow.visibility === Window.Windowed)
+			mainWindow.wasMaximized = false
+	}
+
 	function restoreWindow()
 	{
-		mainWindow.show()
+		// show() alone leaves a minimised window minimised.
+		if (mainWindow.wasMaximized)
+			mainWindow.showMaximized()
+		else
+			mainWindow.showNormal()
+
 		mainWindow.raise()
 		mainWindow.requestActivate()
+	}
+
+	// Stands in for the window while it is minimised. Not while it is hidden in the tray:
+	// that is the user putting the app away on purpose, and the tray icon already carries
+	// the time in its tooltip.
+	MiniTimer
+	{
+		id: miniTimer
+
+		timer: pomodoroTimer
+		themeColor: mainWindow.themeColor
+
+		visible: AppSettings.miniTimer && mainWindow.visibility === Window.Minimized
+
+		onRestoreRequested:
+			mainWindow.restoreWindow()
 	}
 
 	// Instantiated rather than merely referenced, so the bus name is claimed at start-up

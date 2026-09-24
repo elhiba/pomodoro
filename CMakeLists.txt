@@ -180,6 +180,7 @@ set(POMODORO_QML_FILES
 	src/ui/SliderSetting.qml
 	src/ui/StatsPanel.qml
 	src/ui/ResizeHandles.qml
+	src/ui/MiniTimer.qml
 )
 
 foreach(qml_file IN LISTS POMODORO_QML_FILES)

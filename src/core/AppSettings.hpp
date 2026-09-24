@@ -36,6 +36,12 @@ class AppSettings : public QObject
 	Q_PROPERTY(bool alwaysOnTop READ alwaysOnTop WRITE setAlwaysOnTop NOTIFY alwaysOnTopChanged)
 	Q_PROPERTY(bool closeMinimizes READ closeMinimizes WRITE setCloseMinimizes NOTIFY closeMinimizesChanged)
 
+	// The small always-on-top timer shown while the main window is minimised, and where
+	// it was last dragged to. -1 means never placed, and QML picks a corner.
+	Q_PROPERTY(bool miniTimer READ miniTimer WRITE setMiniTimer NOTIFY miniTimerChanged)
+	Q_PROPERTY(int miniTimerX READ miniTimerX WRITE setMiniTimerX NOTIFY miniTimerXChanged)
+	Q_PROPERTY(int miniTimerY READ miniTimerY WRITE setMiniTimerY NOTIFY miniTimerYChanged)
+
 	// Handy for the settings panel, so the bounds live in one place instead of
 	// being repeated in QML.
 	Q_PROPERTY(int minimumMinutes READ minimumMinutes CONSTANT)
@@ -57,6 +63,11 @@ class AppSettings : public QObject
 		// On by default: the timer is meant to be left running, and pressing close out of
 		// habit should not throw away a session.
 		static constexpr bool	DefaultCloseMinimizes = true;
+
+		// On: asked for in issue #1, and it only ever appears when the window is minimised.
+		static constexpr bool	DefaultMiniTimer = true;
+		static constexpr int	DefaultMiniTimerX = -1;
+		static constexpr int	DefaultMiniTimerY = -1;
 
 		static constexpr int	MinimumMinutes = 1;
 		static constexpr int	MaximumMinutes = 120;
@@ -82,6 +93,9 @@ class AppSettings : public QObject
 		bool	musicFollowsFocus() const;
 		bool	alwaysOnTop() const;
 		bool	closeMinimizes() const;
+		bool	miniTimer() const;
+		int		miniTimerX() const;
+		int		miniTimerY() const;
 
 		int		minimumMinutes() const;
 		int		maximumMinutes() const;
@@ -100,6 +114,9 @@ class AppSettings : public QObject
 		void	setMusicFollowsFocus(bool follows);
 		void	setAlwaysOnTop(bool onTop);
 		void	setCloseMinimizes(bool minimizes);
+		void	setMiniTimer(bool value);
+		void	setMiniTimerX(int value);
+		void	setMiniTimerY(int value);
 
 	public slots:
 		void	restoreDefaults();
@@ -117,6 +134,9 @@ class AppSettings : public QObject
 		void	musicFollowsFocusChanged();
 		void	alwaysOnTopChanged();
 		void	closeMinimizesChanged();
+		void	miniTimerChanged();
+		void	miniTimerXChanged();
+		void	miniTimerYChanged();
 
 	private:
 		QSettings	_store;
@@ -134,6 +154,9 @@ class AppSettings : public QObject
 		bool	_musicFollowsFocus = DefaultMusicFollowsFocus;
 		bool	_alwaysOnTop = DefaultAlwaysOnTop;
 		bool	_closeMinimizes = DefaultCloseMinimizes;
+		bool	_miniTimer = DefaultMiniTimer;
+		int		_miniTimerX = DefaultMiniTimerX;
+		int		_miniTimerY = DefaultMiniTimerY;
 
 		void	load();
 		void	store(const char *key, const QVariant &value);

@@ -369,6 +369,15 @@ Item
 
 				ToggleSetting
 				{
+					label: "Floating timer when minimised"
+					checked: AppSettings.miniTimer
+					accentColor: rootPanel.themeColor
+
+					onToggleRequested: (wanted) => AppSettings.miniTimer = wanted
+				}
+
+				ToggleSetting
+				{
 					label: "Close button hides to the tray"
 					checked: AppSettings.closeMinimizes
 					accentColor: rootPanel.themeColor

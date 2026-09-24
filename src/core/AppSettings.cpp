@@ -18,6 +18,9 @@ namespace
 
 	const char *const	KeyAlwaysOnTop = "window/alwaysOnTop";
 	const char *const	KeyCloseMinimizes = "window/closeMinimizes";
+	const char *const	KeyMiniTimer = "window/miniTimer";
+	const char *const	KeyMiniTimerX = "window/miniTimerX";
+	const char *const	KeyMiniTimerY = "window/miniTimerY";
 }
 
 const QString	&AppSettings::defaultStreamUrl()
@@ -98,6 +101,21 @@ bool	AppSettings::alwaysOnTop() const
 bool	AppSettings::closeMinimizes() const
 {
 	return _closeMinimizes;
+}
+
+bool	AppSettings::miniTimer() const
+{
+	return _miniTimer;
+}
+
+int	AppSettings::miniTimerX() const
+{
+	return _miniTimerX;
+}
+
+int	AppSettings::miniTimerY() const
+{
+	return _miniTimerY;
 }
 
 int	AppSettings::minimumMinutes() const
@@ -266,6 +284,39 @@ void	AppSettings::setCloseMinimizes(bool minimizes)
 	emit closeMinimizesChanged();
 }
 
+void	AppSettings::setMiniTimer(bool value)
+{
+	if (_miniTimer == value)
+		return;
+
+	_miniTimer = value;
+	store(KeyMiniTimer, value);
+
+	emit miniTimerChanged();
+}
+
+void	AppSettings::setMiniTimerX(int value)
+{
+	if (_miniTimerX == value)
+		return;
+
+	_miniTimerX = value;
+	store(KeyMiniTimerX, value);
+
+	emit miniTimerXChanged();
+}
+
+void	AppSettings::setMiniTimerY(int value)
+{
+	if (_miniTimerY == value)
+		return;
+
+	_miniTimerY = value;
+	store(KeyMiniTimerY, value);
+
+	emit miniTimerYChanged();
+}
+
 void	AppSettings::restoreDefaults()
 {
 	setFocusMinutes(DefaultFocusMinutes);
@@ -280,6 +331,7 @@ void	AppSettings::restoreDefaults()
 	setMusicFollowsFocus(DefaultMusicFollowsFocus);
 	setAlwaysOnTop(DefaultAlwaysOnTop);
 	setCloseMinimizes(DefaultCloseMinimizes);
+	setMiniTimer(DefaultMiniTimer);
 }
 
 void	AppSettings::load()
@@ -309,6 +361,9 @@ void	AppSettings::load()
 
 	_alwaysOnTop = _store.value(KeyAlwaysOnTop, DefaultAlwaysOnTop).toBool();
 	_closeMinimizes = _store.value(KeyCloseMinimizes, DefaultCloseMinimizes).toBool();
+	_miniTimer = _store.value(KeyMiniTimer, DefaultMiniTimer).toBool();
+	_miniTimerX = _store.value(KeyMiniTimerX, DefaultMiniTimerX).toInt();
+	_miniTimerY = _store.value(KeyMiniTimerY, DefaultMiniTimerY).toInt();
 }
 
 void	AppSettings::store(const char *key, const QVariant &value)
