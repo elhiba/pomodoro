@@ -2,7 +2,7 @@
 
 # Pomodoro
 
-**A focus timer with a lo-fi stream, session statistics and native desktop integration.**
+**A focus timer with a task list, lo-fi radio, YouTube and Spotify, session statistics and native desktop integration.**
 
 Built with C++17 and Qt 6 (Qt Quick / QML). One binary, no runtime dependencies beyond Qt.
 
@@ -15,11 +15,23 @@ Built with C++17 and Qt 6 (Qt Quick / QML). One binary, no runtime dependencies 
 - **Pomodoro timer** — focus, short break and long break sessions with configurable
   lengths, a configurable number of rounds before a long break, and optional automatic
   start of the next session. Drift-free: the clock is derived from a monotonic timer,
-  not counted down tick by tick.
-- **Lo-fi background stream** — play an internet radio stream while you work. If the
-  connection drops it reconnects on its own with exponential backoff, and picks straight
-  back up when the network returns. The station and current track are shown live next to
-  the play button, read from the stream's ICY metadata.
+  not counted down tick by tick. Change a session's length right on the home screen:
+  `−`/`+` beside the digits, the mouse wheel over them, or click them and type.
+- **Task list** (optional) — note what you want to get done, pick the task you are
+  working on, and every focus session you finish counts towards it. The current task
+  shows under the timer. Turn it off in the settings if you do not want it.
+- **Mini timer** — minimise the window and a small always-on-top timer takes its place;
+  drag it anywhere, click it to come back.
+- **Music while you work**, from the source you prefer:
+  - **Radio** — a built-in list of lo-fi and ambient stations;
+  - **YouTube** — any video, mix or live stream, played as audio through
+    [yt-dlp](https://github.com/yt-dlp/yt-dlp) (the app offers to download it for you);
+  - **Spotify** — connect your account and Pomodoro plays, pauses and shows what is on in
+    your own Spotify app (Spotify allows this on Premium only);
+  - **Link** — any Icecast, Shoutcast or HTTP audio stream.
+
+  Streams reconnect on their own with exponential backoff if the connection drops, and
+  the station and current track are shown next to the play button.
 - **OS media controls** — the stream shows up as a real media source in the system:
   Windows **System Media Transport Controls**, **MPRIS** on Linux (GNOME, KDE,
   `playerctl`), and the **Now Playing** centre on macOS. Play, pause and the keyboard's
@@ -50,9 +62,11 @@ with its icon, by typing its name. On Linux the AppImage writes a desktop entry 
 `~/.local/share/applications` the first time it runs, so it is searchable without being
 unpacked anywhere; delete that file to remove it.
 
-**Check for updates** lives at the bottom of the settings drawer. It asks GitHub what the
-newest release is and, when there is one, takes you to the download page — the app never
-replaces itself behind your back.
+**Updates** are checked every time the app starts. When a newer release exists a banner
+offers it; **Update now** downloads it, checks it against the SHA-256 checksum GitHub
+publishes for it, and installs it — the Windows installer runs silently and reopens the
+app, the AppImage replaces itself, and on macOS the new disk image opens for you to drag
+across. The portable zip and builds from source are sent to the release page instead.
 
 ### About the security warnings
 
@@ -73,6 +87,7 @@ went into it.
 | `R` | Reset the current session |
 | `S` | Skip to the next session |
 | `Ctrl` + `,` | Open settings |
+| `Ctrl` + `T` | Open the task list |
 | `Esc` | Close the open drawer |
 | `Ctrl` + `Q` | Quit |
 
