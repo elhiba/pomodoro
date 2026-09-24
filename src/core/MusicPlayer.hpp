@@ -66,6 +66,13 @@ class MusicPlayer : public QObject
 	Q_PROPERTY(SpotifyClient *spotify READ spotify CONSTANT)
 	Q_PROPERTY(SourceKind sourceKind READ sourceKind NOTIFY sourceChanged)
 
+	// Cover art or thumbnail of what is playing, empty for a radio stream.
+	Q_PROPERTY(QString artUrl READ artUrl NOTIFY nowPlayingChanged)
+
+	// Whether next/previous mean anything for this source by itself. The radio list skips
+	// between stations in QML, so it is not counted here.
+	Q_PROPERTY(bool canSkip READ canSkip NOTIFY queueChanged)
+
 	// What the stream says is on. Empty until it has said anything.
 	Q_PROPERTY(QString stationName READ stationName NOTIFY nowPlayingChanged)
 	Q_PROPERTY(QString genre READ genre NOTIFY nowPlayingChanged)
@@ -111,6 +118,16 @@ class MusicPlayer : public QObject
 		YtDlp			*youtube() const;
 		SpotifyClient	*spotify() const;
 		SourceKind		sourceKind() const;
+		QString			artUrl() const;
+		bool			canSkip() const;
+
+		// Plays items[index] from a YouTube listing with the rest of the videos queued
+		// around it, so next and previous walk the list. Playlists in the listing are
+		// skipped over.
+		Q_INVOKABLE void	playYouTubeQueue(const QVariantList &items, int index);
+
+		// Starts one of the Spotify panel's results.
+		Q_INVOKABLE void	playSpotifyResult(int index);
 
 		void	setSource(const QString &source);
 		void	setVolume(qreal volume);
@@ -120,12 +137,19 @@ class MusicPlayer : public QObject
 		void	pause();
 		void	toggle();
 		void	stop();
+		void	next();
+		void	previous();
 
 	signals:
 		void	sourceChanged();
 		void	volumeChanged();
 		void	statusChanged();
 		void	nowPlayingChanged();
+		void	queueChanged();
+
+		// The YouTube queue moved to another video. Main.qml records it as the YouTube
+		// choice so the app comes back to it next time.
+		void	youtubeTrackChanged(const QString &url);
 
 	private slots:
 		void	onPlaybackStateChanged();
@@ -138,7 +162,8 @@ class MusicPlayer : public QObject
 		void	onProbeFailed();
 		void	onReachabilityChanged(QNetworkInformation::Reachability reachability);
 		void	onMetadataChanged();
-		void	onYouTubeResolved(const QUrl &stream, const QString &title, const QString &channel, bool live);
+		void	onYouTubeResolved(const QUrl &stream, const QString &title, const QString &channel, bool live,
+					const QString &thumbnail);
 		void	onYouTubeFailed(const QString &reason);
 		void	onSpotifyStarted();
 		void	onSpotifyFailed(const QString &reason);
@@ -193,6 +218,12 @@ class MusicPlayer : public QObject
 		// where it was instead of starting the playlist over.
 		QString	_spotifyStarted;
 
+		// The YouTube queue: video URLs and their thumbnails, and where in it we are.
+		QStringList	_queue;
+		QStringList	_queueImages;
+		int			_queueIndex = -1;
+		QString		_youtubeThumbnail;
+
 		QString	_source;
 		qreal	_volume = 0.5;
 		Status	_status = Idle;
@@ -222,6 +253,7 @@ class MusicPlayer : public QObject
 		void	rebuildPlayer();
 		void	openStream();
 		void	startPlayer(const QUrl &url);
+		void	moveQueue(int step);
 		void	scheduleRetry(const QString &reason);
 		void	cancelRetry();
 		void	updateNowPlaying();

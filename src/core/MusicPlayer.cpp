@@ -124,6 +124,113 @@ MusicPlayer::SourceKind	MusicPlayer::sourceKind() const
 	return _kind;
 }
 
+QString	MusicPlayer::artUrl() const
+{
+	switch (_kind)
+	{
+		case Spotify:
+			return _spotify->artUrl();
+		case YouTube:
+			return _youtubeThumbnail;
+		case Stream:
+		default:
+			return QString();
+	}
+}
+
+bool	MusicPlayer::canSkip() const
+{
+	if (_kind == Spotify)
+		return true;
+
+	return _kind == YouTube && _queue.size() > 1;
+}
+
+void	MusicPlayer::playYouTubeQueue(const QVariantList &items, int index)
+{
+	QStringList	urls;
+	QStringList	images;
+	int			start = 0;
+
+	for (int row = 0; row < items.size(); row++)
+	{
+		QVariantMap	item = items.at(row).toMap();
+
+		if (item.value(QStringLiteral("kind")).toString() != QLatin1String("video"))
+			continue;
+
+		if (row == index)
+			start = urls.size();
+
+		urls.append(item.value(QStringLiteral("url")).toString());
+		images.append(item.value(QStringLiteral("image")).toString());
+	}
+
+	if (urls.isEmpty())
+		return;
+
+	_queue = urls;
+	_queueImages = images;
+	_queueIndex = start;
+
+	emit queueChanged();
+
+	moveQueue(0);
+}
+
+void	MusicPlayer::playSpotifyResult(int index)
+{
+	if (_kind != Spotify)
+		return;
+
+	_wantsPlayback = true;
+	setStatus(Connecting);
+
+	// From here on, pressing play after a pause resumes this rather than starting the
+	// source's own playlist over.
+	_spotifyStarted = _source == QLatin1String("spotify:") ? QString() : _source;
+
+	_spotify->playResult(index);
+}
+
+void	MusicPlayer::next()
+{
+	if (_kind == Spotify)
+		_spotify->next();
+	else if (_kind == YouTube && _queue.size() > 1)
+		moveQueue(1);
+}
+
+void	MusicPlayer::previous()
+{
+	if (_kind == Spotify)
+		_spotify->previous();
+	else if (_kind == YouTube && _queue.size() > 1)
+		moveQueue(-1);
+}
+
+// Steps through the queue, wrapping at both ends, and plays where it lands.
+void	MusicPlayer::moveQueue(int step)
+{
+	int	count = static_cast<int>(_queue.size());
+
+	_queueIndex = ((_queueIndex + step) % count + count) % count;
+
+	QString	url = _queue.at(_queueIndex);
+
+	_youtubeThumbnail = _queueImages.value(_queueIndex);
+
+	// Main.qml writes this into the settings, which sets it as the source. Doing it here
+	// as well covers a caller that does not listen.
+	emit youtubeTrackChanged(url);
+
+	if (_source != url)
+		setSource(url);
+
+	if (!_wantsPlayback)
+		play();
+}
+
 QString	MusicPlayer::stationName() const
 {
 	if (_kind == Spotify)
@@ -184,6 +291,20 @@ void	MusicPlayer::setSource(const QString &source)
 	_source = trimmed;
 	_spotifyStarted.clear();
 	_youtubeLive = false;
+
+	// A source picked from outside the queue ends the queue.
+	if (_queueIndex < 0 || _queue.value(_queueIndex) != _source)
+	{
+		bool	hadQueue = !_queue.isEmpty();
+
+		_queue.clear();
+		_queueImages.clear();
+		_queueIndex = -1;
+		_youtubeThumbnail.clear();
+
+		if (hadQueue)
+			emit queueChanged();
+	}
 
 	if (_source.startsWith(QLatin1String("spotify:")))
 		_kind = Spotify;
@@ -449,7 +570,8 @@ void	MusicPlayer::onMetadataChanged()
 	updateNowPlaying();
 }
 
-void	MusicPlayer::onYouTubeResolved(const QUrl &stream, const QString &title, const QString &channel, bool live)
+void	MusicPlayer::onYouTubeResolved(const QUrl &stream, const QString &title, const QString &channel, bool live,
+	const QString &thumbnail)
 {
 	if (!_wantsPlayback || _retryPending || _kind != YouTube)
 		return;
@@ -457,6 +579,9 @@ void	MusicPlayer::onYouTubeResolved(const QUrl &stream, const QString &title, co
 	_backendTitle = title;
 	_backendStation = channel;
 	_youtubeLive = live;
+
+	if (_youtubeThumbnail.isEmpty())
+		_youtubeThumbnail = thumbnail;
 
 	updateNowPlaying();
 	startPlayer(stream);
@@ -538,7 +663,12 @@ void	MusicPlayer::refreshStatus()
 	// way a background track is expected to loop.
 	if (media == QMediaPlayer::EndOfMedia && _kind == YouTube && !_youtubeLive)
 	{
-		openStream();
+		// In a queue, the end of one video is the start of the next.
+		if (_queue.size() > 1)
+			moveQueue(1);
+		else
+			openStream();
+
 		return;
 	}
 

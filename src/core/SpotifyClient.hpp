@@ -9,6 +9,7 @@
 #include <QString>
 #include <QTcpServer>
 #include <QTimer>
+#include <QVariantList>
 
 #include <functional>
 
@@ -46,6 +47,19 @@ class SpotifyClient : public QObject
 	Q_PROPERTY(QString accountName READ accountName NOTIFY stateChanged)
 	Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
 
+	// Signed in before the library scopes were asked for: search works, the user's own
+	// playlists and history need one more trip through Connect.
+	Q_PROPERTY(bool needsReconnect READ needsReconnect NOTIFY stateChanged)
+
+	// What the music panel lists: search results or a library section, as maps with kind,
+	// uri, title, subtitle and image. Replaced as a whole on every search or section.
+	Q_PROPERTY(QVariantList results READ results NOTIFY resultsChanged)
+	Q_PROPERTY(bool searching READ searching NOTIFY resultsChanged)
+	Q_PROPERTY(QString resultsError READ resultsError NOTIFY resultsChanged)
+
+	// The cover of what is playing now, for the panel.
+	Q_PROPERTY(QString artUrl READ artUrl NOTIFY nowPlayingChanged)
+
 	public:
 		explicit SpotifyClient(QObject *parent = nullptr);
 
@@ -60,6 +74,12 @@ class SpotifyClient : public QObject
 		QString	track() const;
 		QString	artist() const;
 		bool	isPlaying() const;
+		QString	artUrl() const;
+
+		bool			needsReconnect() const;
+		QVariantList	results() const;
+		bool			searching() const;
+		QString			resultsError() const;
 
 		void	setClientId(const QString &clientId);
 
@@ -67,6 +87,13 @@ class SpotifyClient : public QObject
 		// player last had when it is empty. Answers with playbackStarted/playbackFailed.
 		void	play(const QString &uri);
 		void	pause();
+		void	next();
+		void	previous();
+
+		// Starts results[index]. A song plays with the other songs of the same list queued
+		// after it, so skipping moves through the list; anything else is played as a
+		// whole. Answers with playbackStarted/playbackFailed like play().
+		void	playResult(int index);
 
 		// Reads back what is playing every few seconds, for the now-playing line.
 		void	setPolling(bool polling);
@@ -79,11 +106,17 @@ class SpotifyClient : public QObject
 		void	connectAccount();
 		void	disconnectAccount();
 
+		void	search(const QString &query);
+
+		// "playlists", "liked", "recent" or "top".
+		void	loadLibrary(const QString &section);
+
 	signals:
 		void	stateChanged();
 		void	nowPlayingChanged();
 		void	playbackStarted();
 		void	playbackFailed(const QString &reason);
+		void	resultsChanged();
 
 	private:
 		using Handler = std::function<void(int status, const QJsonObject &body, const QString &error)>;
@@ -112,7 +145,17 @@ class SpotifyClient : public QObject
 
 		QString	_track;
 		QString	_artist;
+		QString	_artUrl;
 		bool	_isPlaying = false;
+
+		QString			_grantedScopes;
+		QVariantList	_results;
+		bool			_searching = false;
+		QString			_resultsError;
+
+		// Bumped by every search or section load, so a slow answer to an older request
+		// cannot overwrite a newer one.
+		int				_resultsGeneration = 0;
 
 		void	onCallbackConnection();
 		void	exchangeCode(const QByteArray &code);
@@ -120,7 +163,8 @@ class SpotifyClient : public QObject
 		void	storeTokens(const QJsonObject &body);
 		void	fetchAccount();
 		void	poll();
-		void	playOn(const QString &uri, const QString &deviceId);
+		void	playOn(const QJsonObject &body, const QString &deviceId);
+		void	fetchResults(const QString &path, std::function<QVariantList(const QJsonObject &)> parse);
 		void	finishConnecting(const QString &error);
 
 		// An authorised Web API call. Refreshes the access token first when it has run out,

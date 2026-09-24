@@ -205,6 +205,9 @@ Window
 		onTasksRequested:
 			mainWindow.toggleDrawer(tasksPanel)
 
+		onMusicPanelRequested:
+			mainWindow.toggleDrawer(musicPanel)
+
 		onMusicToggled:
 			MusicPlayer.toggle()
 	}
@@ -340,6 +343,7 @@ Window
 
 		anchors.fill: parent
 		themeColor: mainWindow.themeColor
+		stations: mainWindow.stations
 	}
 
 	StatsPanel
@@ -362,6 +366,74 @@ Window
 		tasks: taskList
 	}
 
+	MusicPanel
+	{
+		id: musicPanel
+
+		anchors.fill: parent
+		themeColor: mainWindow.themeColor
+		stations: mainWindow.stations
+
+		onSkipRequested: (step) => mainWindow.skipMusic(step)
+	}
+
+	// The radio list, shared by the music panel and the settings. Every one was checked to
+	// answer with audio and an icy-name before it went in; the notes say what to expect.
+	readonly property var stations: [
+		{ name: "Lofi Music", note: "Lo-fi beats · Zeno", url: "https://stream.zeno.fm/f3wvbbqmdg8uv" },
+		{ name: "Lofi Hip Hop Radio", note: "Lo-fi hip hop · Zeno", url: "https://stream.zeno.fm/0r0xa792kwzuv" },
+		{ name: "Lofi", note: "Lo-fi · laut.fm", url: "https://stream.laut.fm/lofi" },
+		{ name: "ChillHop", note: "Chillhop · FluxFM", url: "https://streams.fluxfm.de/Chillhop/mp3-128/streams.fluxfm.de/" },
+		{ name: "Hunter.FM Lo-Fi", note: "Lo-fi · Hunter.FM", url: "https://live.hunter.fm/lofi_high" },
+		{ name: "Fluid", note: "Instrumental hip hop · SomaFM", url: "https://ice1.somafm.com/fluid-128-mp3" },
+		{ name: "Groove Salad", note: "Chilled ambient beats · SomaFM", url: "https://ice1.somafm.com/groovesalad-128-mp3" },
+		{ name: "Deep Space One", note: "Deep ambient · SomaFM", url: "https://ice1.somafm.com/deepspaceone-128-mp3" },
+		{ name: "Drone Zone", note: "Ambient, no beats · SomaFM", url: "https://ice1.somafm.com/dronezone-128-mp3" }
+	]
+
+	// Next and previous. On the radio list that is the next station, kept playing if it
+	// was; everywhere else MusicPlayer knows what to do.
+	function skipMusic(step)
+	{
+		if (AppSettings.musicSource !== "radio")
+		{
+			if (step > 0)
+				MusicPlayer.next()
+			else
+				MusicPlayer.previous()
+
+			return
+		}
+
+		let count = mainWindow.stations.length
+		let current = 0
+
+		for (let index = 0; index < count; index++)
+		{
+			if (mainWindow.stations[index].url === AppSettings.radioUrl)
+				current = index
+		}
+
+		let wasPlaying = MusicPlayer.active
+
+		AppSettings.radioUrl = mainWindow.stations[(current + step + count) % count].url
+
+		if (!wasPlaying)
+			MusicPlayer.play()
+	}
+
+	// A YouTube queue moving on is remembered as the YouTube choice.
+	Connections
+	{
+		target: MusicPlayer
+
+		function onYoutubeTrackChanged(url)
+		{
+			AppSettings.musicSource = "youtube"
+			AppSettings.youtubeUrl = url
+		}
+	}
+
 	// Turning the list off while its drawer is open would leave a drawer with no button.
 	Connections
 	{
@@ -381,6 +453,7 @@ Window
 		settingsPanel.open = false
 		statsPanel.open = false
 		tasksPanel.open = false
+		musicPanel.open = false
 
 		drawer.open = wanted
 	}
@@ -388,6 +461,7 @@ Window
 	// Space, R and S are single letters, so they have to stay out of the way of any
 	// text field that currently has the keyboard.
 	readonly property bool typing: settingsPanel.typing || timerDisplay.typing || tasksPanel.typing
+		|| musicPanel.typing
 
 	Shortcut
 	{
@@ -572,13 +646,14 @@ Window
 	Shortcut
 	{
 		sequences: ["Escape"]
-		enabled: settingsPanel.open || statsPanel.open || tasksPanel.open
+		enabled: settingsPanel.open || statsPanel.open || tasksPanel.open || musicPanel.open
 
 		onActivated:
 		{
 			settingsPanel.open = false
 			statsPanel.open = false
 			tasksPanel.open = false
+			musicPanel.open = false
 		}
 	}
 

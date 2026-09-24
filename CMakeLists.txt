@@ -197,6 +197,8 @@ set(POMODORO_QML_FILES
 	src/ui/ResizeHandles.qml
 	src/ui/MiniTimer.qml
 	src/ui/TasksPanel.qml
+	src/ui/SourceTabs.qml
+	src/ui/MusicPanel.qml
 )
 
 foreach(qml_file IN LISTS POMODORO_QML_FILES)
@@ -233,6 +235,16 @@ qt_add_qml_module(pomodoro
 		assets/icons/playTimer.svg
 		assets/icons/pauseTimer.svg
 		assets/icons/restartTimer.svg
+		assets/icons/spotify.svg
+		assets/icons/youtube.svg
+		assets/icons/radio.svg
+		assets/icons/plus.svg
+		assets/icons/search.svg
+		assets/icons/musicNote.svg
+		assets/icons/skipNext.svg
+		assets/icons/skipPrevious.svg
+		assets/icons/playSolid.svg
+		assets/icons/pauseSolid.svg
 		assets/icons/pomodoroLogo.png
 		assets/icons/pomodoroLogoTransport.png
 

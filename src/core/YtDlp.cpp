@@ -40,6 +40,13 @@ YtDlp::~YtDlp()
 {
 	cancel();
 
+	if (_browser)
+	{
+		_browser->disconnect(this);
+		_browser->kill();
+		_browser->waitForFinished(1000);
+	}
+
 	if (_download)
 	{
 		_download->abort();
@@ -74,6 +81,168 @@ QString	YtDlp::statusText() const
 		return QStringLiteral("YouTube needs yt-dlp, a free open-source tool. It is not installed yet.");
 
 	return QStringLiteral("Using yt-dlp from %1").arg(QDir::toNativeSeparators(_program));
+}
+
+QVariantList	YtDlp::results() const
+{
+	return _results;
+}
+
+bool	YtDlp::searching() const
+{
+	return _browser != nullptr;
+}
+
+QString	YtDlp::resultsError() const
+{
+	return _resultsError;
+}
+
+QString	YtDlp::resultsTitle() const
+{
+	return _resultsTitle;
+}
+
+void	YtDlp::search(const QString &query, bool playlists)
+{
+	QString	trimmed = query.trimmed();
+
+	if (trimmed.isEmpty())
+		return;
+
+	// Videos through yt-dlp's own search; playlists through YouTube's results page with
+	// its "playlists only" filter, which yt-dlp reads like any other listing.
+	QString	target = playlists
+		? QStringLiteral("https://www.youtube.com/results?search_query=%1&sp=EgIQAw%253D%253D")
+			.arg(QString::fromLatin1(QUrl::toPercentEncoding(trimmed)))
+		: QStringLiteral("ytsearch%1:%2").arg(SearchResults).arg(trimmed);
+
+	browse({ QStringLiteral("--playlist-end"), QString::number(SearchResults), target },
+		QString());
+}
+
+void	YtDlp::openPlaylist(const QString &url, const QString &title)
+{
+	browse({ QStringLiteral("--playlist-end"), QString::number(PlaylistEntries), url }, title);
+}
+
+void	YtDlp::browse(const QStringList &arguments, const QString &title)
+{
+	if (_program.isEmpty())
+	{
+		_resultsError = QStringLiteral("YouTube needs yt-dlp first.");
+		emit resultsChanged();
+		return;
+	}
+
+	if (_browser)
+	{
+		_browser->disconnect(this);
+		_browser->kill();
+		_browser->deleteLater();
+	}
+
+	_browser = new QProcess(this);
+	prepare(_browser);
+
+	_pendingTitle = title;
+	_resultsError.clear();
+
+	connect(_browser, &QProcess::finished, this, &YtDlp::onBrowseFinished);
+
+	// --flat-playlist lists entries without opening each one, which is what keeps a
+	// search to a few seconds.
+	_browser->start(_program, QStringList{
+		QStringLiteral("--flat-playlist"),
+		QStringLiteral("--dump-single-json"),
+		QStringLiteral("--no-warnings")
+	} + arguments);
+
+	emit resultsChanged();
+}
+
+void	YtDlp::onBrowseFinished(int exitCode, QProcess::ExitStatus exitStatus)
+{
+	QProcess	*process = _browser;
+
+	if (!process)
+		return;
+
+	_browser = nullptr;
+	process->deleteLater();
+
+	if (exitStatus != QProcess::NormalExit || exitCode != 0)
+	{
+		_resultsError = QStringLiteral("YouTube did not answer. Try again in a moment.");
+		emit resultsChanged();
+		return;
+	}
+
+	QJsonObject	listing = QJsonDocument::fromJson(process->readAllStandardOutput()).object();
+	QVariantList	items;
+
+	for (const QJsonValue &value : listing.value(QStringLiteral("entries")).toArray())
+	{
+		QJsonObject	entry = value.toObject();
+		QString		id = entry.value(QStringLiteral("id")).toString();
+		QString		url = entry.value(QStringLiteral("url")).toString();
+		bool		playlist = entry.value(QStringLiteral("ie_key")).toString() == QLatin1String("YoutubeTab");
+
+		if (id.isEmpty() || url.isEmpty())
+			continue;
+
+		// Videos have a thumbnail at a fixed address, the small one that suits a row;
+		// playlists only have whatever the listing carried.
+		QString	image;
+
+		if (playlist)
+		{
+			QJsonArray	thumbnails = entry.value(QStringLiteral("thumbnails")).toArray();
+
+			if (!thumbnails.isEmpty())
+				image = thumbnails.last().toObject().value(QStringLiteral("url")).toString();
+		}
+		else
+			image = QStringLiteral("https://i.ytimg.com/vi/%1/mqdefault.jpg").arg(id);
+
+		QString	channel = entry.value(QStringLiteral("channel")).toString();
+
+		if (channel.isEmpty())
+			channel = entry.value(QStringLiteral("uploader")).toString();
+
+		bool	live = entry.value(QStringLiteral("live_status")).toString() == QLatin1String("is_live");
+		int		duration = entry.value(QStringLiteral("duration")).toInt();
+		QString	subtitle = channel;
+
+		if (playlist)
+			subtitle = QStringLiteral("Playlist · ") + channel;
+		else if (live)
+			subtitle += QStringLiteral(" · LIVE");
+		else if (duration > 0)
+		{
+			subtitle += duration >= 3600
+				? QStringLiteral(" · %1:%2:%3").arg(duration / 3600).arg(duration / 60 % 60, 2, 10, QLatin1Char('0'))
+					.arg(duration % 60, 2, 10, QLatin1Char('0'))
+				: QStringLiteral(" · %1:%2").arg(duration / 60).arg(duration % 60, 2, 10, QLatin1Char('0'));
+		}
+
+		items.append(QVariantMap{
+			{ QStringLiteral("kind"), playlist ? QStringLiteral("playlist") : QStringLiteral("video") },
+			{ QStringLiteral("url"), url },
+			{ QStringLiteral("title"), entry.value(QStringLiteral("title")).toString() },
+			{ QStringLiteral("subtitle"), subtitle },
+			{ QStringLiteral("image"), image },
+			{ QStringLiteral("live"), live }
+		});
+	}
+
+	_results = items;
+	_resultsTitle = _pendingTitle;
+
+	if (items.isEmpty())
+		_resultsError = QStringLiteral("Nothing found.");
+
+	emit resultsChanged();
 }
 
 bool	YtDlp::handles(const QUrl &url)
@@ -253,7 +422,8 @@ void	YtDlp::onResolveFinished(int exitCode, QProcess::ExitStatus exitStatus)
 	emit resolved(QUrl(stream),
 		info.value(QStringLiteral("title")).toString(),
 		channel,
-		info.value(QStringLiteral("is_live")).toBool());
+		info.value(QStringLiteral("is_live")).toBool(),
+		info.value(QStringLiteral("thumbnail")).toString());
 }
 
 void	YtDlp::onSumsFinished()

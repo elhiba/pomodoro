@@ -22,15 +22,71 @@ namespace
 {
 	const char *const	KeyRefreshToken = "spotify/refreshToken";
 	const char *const	KeyAccountName = "spotify/accountName";
+	const char *const	KeyScopes = "spotify/scopes";
 
 	const char *const	AuthorizeUrl = "https://accounts.spotify.com/authorize";
 	const char *const	TokenUrl = "https://accounts.spotify.com/api/token";
 	const char *const	ApiBase = "https://api.spotify.com";
 
-	// Reading the player's state and controlling it. Nothing about the library, playlists
-	// or the profile beyond the display name /v1/me always returns.
+	// Reading and controlling the player, and reading -- never changing -- the user's
+	// playlists, liked songs, recent and most played tracks for the music panel.
 	const char *const	Scopes =
-		"user-read-playback-state user-modify-playback-state user-read-currently-playing";
+		"user-read-playback-state user-modify-playback-state user-read-currently-playing "
+		"playlist-read-private user-library-read user-read-recently-played user-top-read";
+
+	// The one scope whose absence says the sign-in predates the library.
+	const char *const	LibraryScope = "playlist-read-private";
+
+	// The smallest image that is still sharp in a 56 px row. Spotify lists images largest
+	// first.
+	QString	pickImage(const QJsonArray &images)
+	{
+		QString	chosen;
+
+		for (const QJsonValue &value : images)
+		{
+			QJsonObject	image = value.toObject();
+			int			width = image.value(QStringLiteral("width")).toInt();
+
+			if (chosen.isEmpty() || width == 0 || width >= 120)
+				chosen = image.value(QStringLiteral("url")).toString();
+		}
+
+		return chosen;
+	}
+
+	QString	artistNames(const QJsonArray &artists)
+	{
+		QStringList	names;
+
+		for (const QJsonValue &value : artists)
+			names.append(value.toObject().value(QStringLiteral("name")).toString());
+
+		return names.join(QStringLiteral(", "));
+	}
+
+	QVariantMap	trackItem(const QJsonObject &track)
+	{
+		return {
+			{ QStringLiteral("kind"), QStringLiteral("track") },
+			{ QStringLiteral("uri"), track.value(QStringLiteral("uri")).toString() },
+			{ QStringLiteral("title"), track.value(QStringLiteral("name")).toString() },
+			{ QStringLiteral("subtitle"), artistNames(track.value(QStringLiteral("artists")).toArray()) },
+			{ QStringLiteral("image"), pickImage(track.value(QStringLiteral("album")).toObject()
+				.value(QStringLiteral("images")).toArray()) }
+		};
+	}
+
+	QVariantMap	collectionItem(const QString &kind, const QJsonObject &object, const QString &subtitle)
+	{
+		return {
+			{ QStringLiteral("kind"), kind },
+			{ QStringLiteral("uri"), object.value(QStringLiteral("uri")).toString() },
+			{ QStringLiteral("title"), object.value(QStringLiteral("name")).toString() },
+			{ QStringLiteral("subtitle"), subtitle },
+			{ QStringLiteral("image"), pickImage(object.value(QStringLiteral("images")).toArray()) }
+		};
+	}
 
 	QByteArray	randomUrlSafe(int bytes)
 	{
@@ -62,6 +118,7 @@ SpotifyClient::SpotifyClient(QObject *parent)
 
 	_refreshToken = settings.value(QLatin1String(KeyRefreshToken)).toString();
 	_accountName = settings.value(QLatin1String(KeyAccountName)).toString();
+	_grantedScopes = settings.value(QLatin1String(KeyScopes)).toString();
 
 	_authTimeout.setSingleShot(true);
 	_authTimeout.setInterval(AuthTimeoutMs);
@@ -142,6 +199,31 @@ bool	SpotifyClient::isPlaying() const
 	return _isPlaying;
 }
 
+QString	SpotifyClient::artUrl() const
+{
+	return _artUrl;
+}
+
+bool	SpotifyClient::needsReconnect() const
+{
+	return connected() && !_grantedScopes.split(QLatin1Char(' ')).contains(QLatin1String(LibraryScope));
+}
+
+QVariantList	SpotifyClient::results() const
+{
+	return _results;
+}
+
+bool	SpotifyClient::searching() const
+{
+	return _searching;
+}
+
+QString	SpotifyClient::resultsError() const
+{
+	return _resultsError;
+}
+
 void	SpotifyClient::setClientId(const QString &clientId)
 {
 	QString	trimmed = clientId.trimmed();
@@ -161,7 +243,225 @@ void	SpotifyClient::setClientId(const QString &clientId)
 
 void	SpotifyClient::play(const QString &uri)
 {
-	playOn(uri, QString());
+	QJsonObject	body;
+
+	if (uri.startsWith(QLatin1String("spotify:track:")) || uri.startsWith(QLatin1String("spotify:episode:")))
+		body.insert(QStringLiteral("uris"), QJsonArray{ uri });
+	else if (!uri.isEmpty())
+		body.insert(QStringLiteral("context_uri"), uri);
+
+	playOn(body, QString());
+}
+
+void	SpotifyClient::next()
+{
+	api("POST", QStringLiteral("/v1/me/player/next"), QJsonObject(),
+		[this](int, const QJsonObject &, const QString &)
+		{
+			QTimer::singleShot(600, this, &SpotifyClient::poll);
+		});
+}
+
+void	SpotifyClient::previous()
+{
+	api("POST", QStringLiteral("/v1/me/player/previous"), QJsonObject(),
+		[this](int, const QJsonObject &, const QString &)
+		{
+			QTimer::singleShot(600, this, &SpotifyClient::poll);
+		});
+}
+
+void	SpotifyClient::playResult(int index)
+{
+	if (index < 0 || index >= _results.size())
+		return;
+
+	QVariantMap	chosen = _results.at(index).toMap();
+	QJsonObject	body;
+
+	if (chosen.value(QStringLiteral("kind")).toString() == QLatin1String("track"))
+	{
+		// Every song in the list, starting from the one tapped, so next and previous walk
+		// the list the user is looking at.
+		QJsonArray	uris;
+		int			position = 0;
+
+		for (int row = 0; row < _results.size(); row++)
+		{
+			QVariantMap	item = _results.at(row).toMap();
+
+			if (item.value(QStringLiteral("kind")).toString() != QLatin1String("track"))
+				continue;
+
+			if (row == index)
+				position = uris.size();
+
+			uris.append(item.value(QStringLiteral("uri")).toString());
+		}
+
+		body.insert(QStringLiteral("uris"), uris);
+		body.insert(QStringLiteral("offset"), QJsonObject{ { QStringLiteral("position"), position } });
+	}
+	else
+		body.insert(QStringLiteral("context_uri"), chosen.value(QStringLiteral("uri")).toString());
+
+	playOn(body, QString());
+}
+
+void	SpotifyClient::search(const QString &query)
+{
+	QString	trimmed = query.trimmed();
+
+	if (trimmed.isEmpty())
+		return;
+
+	QUrlQuery	params;
+
+	params.addQueryItem(QStringLiteral("q"), trimmed);
+	params.addQueryItem(QStringLiteral("type"), QStringLiteral("track,playlist,album,artist"));
+	params.addQueryItem(QStringLiteral("limit"), QStringLiteral("10"));
+
+	fetchResults(QStringLiteral("/v1/search?") + params.toString(QUrl::FullyEncoded),
+		[](const QJsonObject &body)
+		{
+			QVariantList	items;
+
+			// Songs first: a search is most often for one. Then the collections.
+			for (const QJsonValue &value : body.value(QStringLiteral("tracks")).toObject().value(QStringLiteral("items")).toArray())
+				items.append(trackItem(value.toObject()));
+
+			// Spotify pads playlist results with nulls for playlists it will not show.
+			for (const QJsonValue &value : body.value(QStringLiteral("playlists")).toObject().value(QStringLiteral("items")).toArray())
+			{
+				if (value.isObject())
+				{
+					QJsonObject	playlist = value.toObject();
+
+					items.append(collectionItem(QStringLiteral("playlist"), playlist,
+						QStringLiteral("Playlist · ") + playlist.value(QStringLiteral("owner")).toObject()
+							.value(QStringLiteral("display_name")).toString()));
+				}
+			}
+
+			for (const QJsonValue &value : body.value(QStringLiteral("albums")).toObject().value(QStringLiteral("items")).toArray())
+			{
+				QJsonObject	album = value.toObject();
+
+				items.append(collectionItem(QStringLiteral("album"), album,
+					QStringLiteral("Album · ") + artistNames(album.value(QStringLiteral("artists")).toArray())));
+			}
+
+			for (const QJsonValue &value : body.value(QStringLiteral("artists")).toObject().value(QStringLiteral("items")).toArray())
+				items.append(collectionItem(QStringLiteral("artist"), value.toObject(), QStringLiteral("Artist")));
+
+			return items;
+		});
+}
+
+void	SpotifyClient::loadLibrary(const QString &section)
+{
+	if (section == QLatin1String("playlists"))
+	{
+		fetchResults(QStringLiteral("/v1/me/playlists?limit=50"), [](const QJsonObject &body)
+		{
+			QVariantList	items;
+
+			for (const QJsonValue &value : body.value(QStringLiteral("items")).toArray())
+			{
+				QJsonObject	playlist = value.toObject();
+				int			tracks = playlist.value(QStringLiteral("tracks")).toObject().value(QStringLiteral("total")).toInt();
+
+				items.append(collectionItem(QStringLiteral("playlist"), playlist,
+					QStringLiteral("%1 songs").arg(tracks)));
+			}
+
+			return items;
+		});
+	}
+	else if (section == QLatin1String("liked"))
+	{
+		fetchResults(QStringLiteral("/v1/me/tracks?limit=50"), [](const QJsonObject &body)
+		{
+			QVariantList	items;
+
+			for (const QJsonValue &value : body.value(QStringLiteral("items")).toArray())
+				items.append(trackItem(value.toObject().value(QStringLiteral("track")).toObject()));
+
+			return items;
+		});
+	}
+	else if (section == QLatin1String("recent"))
+	{
+		fetchResults(QStringLiteral("/v1/me/player/recently-played?limit=50"), [](const QJsonObject &body)
+		{
+			QVariantList	items;
+			QStringList		seen;
+
+			// The history repeats a song every time it was played; once is enough here.
+			for (const QJsonValue &value : body.value(QStringLiteral("items")).toArray())
+			{
+				QJsonObject	track = value.toObject().value(QStringLiteral("track")).toObject();
+				QString		uri = track.value(QStringLiteral("uri")).toString();
+
+				if (seen.contains(uri))
+					continue;
+
+				seen.append(uri);
+				items.append(trackItem(track));
+			}
+
+			return items;
+		});
+	}
+	else if (section == QLatin1String("top"))
+	{
+		fetchResults(QStringLiteral("/v1/me/top/tracks?limit=50&time_range=short_term"), [](const QJsonObject &body)
+		{
+			QVariantList	items;
+
+			for (const QJsonValue &value : body.value(QStringLiteral("items")).toArray())
+				items.append(trackItem(value.toObject()));
+
+			return items;
+		});
+	}
+}
+
+void	SpotifyClient::fetchResults(const QString &path, std::function<QVariantList(const QJsonObject &)> parse)
+{
+	int	generation = ++_resultsGeneration;
+
+	_searching = true;
+	_resultsError.clear();
+
+	emit resultsChanged();
+
+	api("GET", path, QJsonObject(), [this, generation, parse](int status, const QJsonObject &body, const QString &error)
+	{
+		if (generation != _resultsGeneration)
+			return;
+
+		_searching = false;
+
+		if (status == 200)
+		{
+			_results = parse(body);
+
+			if (_results.isEmpty())
+				_resultsError = QStringLiteral("Nothing here.");
+		}
+		else
+		{
+			_results.clear();
+
+			if (status == 403 || status == 401)
+				_resultsError = QStringLiteral("Spotify needs one more permission for this. Press Reconnect.");
+			else
+				_resultsError = status > 0 ? reasonFor(status, body) : error;
+		}
+
+		emit resultsChanged();
+	});
 }
 
 void	SpotifyClient::pause()
@@ -284,8 +584,15 @@ void	SpotifyClient::disconnectAccount()
 	_accessExpiry = QDateTime();
 	_accountName.clear();
 	_errorText.clear();
+	_grantedScopes.clear();
+	settings.remove(QLatin1String(KeyScopes));
+
+	_results.clear();
+	_resultsError.clear();
 
 	setPolling(false);
+
+	emit resultsChanged();
 
 	emit stateChanged();
 }
@@ -438,6 +745,16 @@ void	SpotifyClient::storeTokens(const QJsonObject &body)
 
 	// Spotify may rotate the refresh token on a refresh; when it does, the old one stops
 	// working, so the new one has to be written down straight away.
+	// What the user actually agreed to, which can be less than what was asked for.
+	QString	scopes = body.value(QStringLiteral("scope")).toString();
+
+	if (!scopes.isEmpty() && scopes != _grantedScopes)
+	{
+		_grantedScopes = scopes;
+		QSettings().setValue(QLatin1String(KeyScopes), scopes);
+		emit stateChanged();
+	}
+
 	QString	refresh = body.value(QStringLiteral("refresh_token")).toString();
 
 	if (!refresh.isEmpty() && refresh != _refreshToken)
@@ -474,6 +791,7 @@ void	SpotifyClient::poll()
 		{
 			QString	track;
 			QString	artist;
+			QString	art;
 			bool	playing = false;
 
 			if (status == 200)
@@ -491,36 +809,37 @@ void	SpotifyClient::poll()
 				track = item.value(QStringLiteral("name")).toString();
 				artist = artists.join(QStringLiteral(", "));
 				playing = body.value(QStringLiteral("is_playing")).toBool();
+
+				QJsonArray	images = item.value(QStringLiteral("album")).toObject().value(QStringLiteral("images")).toArray();
+
+				if (images.isEmpty())
+					images = item.value(QStringLiteral("images")).toArray();
+
+				art = pickImage(images);
 			}
 			else if (status != 204)
 				return;
 
-			if (track == _track && artist == _artist && playing == _isPlaying)
+			if (track == _track && artist == _artist && playing == _isPlaying && art == _artUrl)
 				return;
 
 			_track = track;
 			_artist = artist;
+			_artUrl = art;
 			_isPlaying = playing;
 
 			emit nowPlayingChanged();
 		});
 }
 
-void	SpotifyClient::playOn(const QString &uri, const QString &deviceId)
+void	SpotifyClient::playOn(const QJsonObject &body, const QString &deviceId)
 {
-	QJsonObject	body;
-
-	if (uri.startsWith(QLatin1String("spotify:track:")) || uri.startsWith(QLatin1String("spotify:episode:")))
-		body.insert(QStringLiteral("uris"), QJsonArray{ uri });
-	else if (!uri.isEmpty())
-		body.insert(QStringLiteral("context_uri"), uri);
-
 	QString	path = QStringLiteral("/v1/me/player/play");
 
 	if (!deviceId.isEmpty())
 		path += QStringLiteral("?device_id=") + QString::fromLatin1(QUrl::toPercentEncoding(deviceId));
 
-	api("PUT", path, body, [this, uri, deviceId](int status, const QJsonObject &reply, const QString &error)
+	api("PUT", path, body, [this, body, deviceId](int status, const QJsonObject &reply, const QString &error)
 	{
 		if (status >= 200 && status < 300)
 		{
@@ -534,7 +853,7 @@ void	SpotifyClient::playOn(const QString &uri, const QString &deviceId)
 		if (status == 404 && deviceId.isEmpty())
 		{
 			api("GET", QStringLiteral("/v1/me/player/devices"), QJsonObject(),
-				[this, uri](int, const QJsonObject &devices, const QString &)
+				[this, body](int, const QJsonObject &devices, const QString &)
 				{
 					QString	chosen;
 
@@ -555,7 +874,7 @@ void	SpotifyClient::playOn(const QString &uri, const QString &deviceId)
 						return;
 					}
 
-					playOn(uri, chosen);
+					playOn(body, chosen);
 				});
 			return;
 		}
@@ -567,7 +886,7 @@ void	SpotifyClient::playOn(const QString &uri, const QString &deviceId)
 			.value(QStringLiteral("reason")).toString() != QLatin1String("PREMIUM_REQUIRED"))
 		{
 			api("GET", QStringLiteral("/v1/me/player"), QJsonObject(),
-				[this, uri, status, reply](int playerStatus, const QJsonObject &player, const QString &)
+				[this, body, status, reply](int playerStatus, const QJsonObject &player, const QString &)
 				{
 					if (playerStatus == 200 && player.value(QStringLiteral("is_playing")).toBool())
 					{
@@ -577,7 +896,7 @@ void	SpotifyClient::playOn(const QString &uri, const QString &deviceId)
 					}
 
 					// Asked to resume, and there is nothing to resume.
-					if (uri.isEmpty())
+					if (body.isEmpty())
 					{
 						emit playbackFailed(QStringLiteral("Spotify has nothing to resume. Pick something to play in the music panel."));
 						return;

@@ -13,6 +13,7 @@ Rectangle
 	signal statsRequested()
 	signal musicToggled()
 	signal tasksRequested()
+	signal musicPanelRequested()
 
     color: rootMenu.themeColor
 
@@ -145,6 +146,27 @@ Rectangle
             MusicPlayer.toggle()
     }
 
+	// Opens the music panel: stations, YouTube and Spotify, with skip controls.
+	Button
+	{
+		id: libraryBtn
+
+		width: 40
+		height: 40
+
+		anchors.left: musicBtn.right
+
+		background: Rectangle { color: libraryBtn.hovered ? "#929494" : "transparent" }
+
+		icon.source: "assets/icons/musicNote.svg"
+		icon.color: "#e3e3e3"
+		icon.width: 20
+		icon.height: 20
+
+		onClicked:
+			rootMenu.musicPanelRequested()
+	}
+
 	// What is on, tucked in beside the music button: the station on the top line, the
 	// track underneath. While the stream is still connecting or coming back after a
 	// drop it says so instead, so a silent player is never a mystery.
@@ -155,7 +177,7 @@ Rectangle
 	{
 		id: nowPlaying
 
-		anchors.left: musicBtn.right
+		anchors.left: libraryBtn.right
 		anchors.leftMargin: 8
 		anchors.verticalCenter: parent.verticalCenter
 
@@ -240,10 +262,18 @@ Rectangle
 			}
 		}
 
-		// The full text on hover, since the line is elided most of the time.
+		// The full text on hover, since the line is elided most of the time, and a click
+		// opens the music panel.
 		HoverHandler
 		{
 			id: nowPlayingHover
+			cursorShape: Qt.PointingHandCursor
+		}
+
+		TapHandler
+		{
+			onTapped:
+				rootMenu.musicPanelRequested()
 		}
 
 		ToolTip.visible: nowPlayingHover.hovered && (nowPlaying.bottomLine.length > 0 || nowPlaying.showsStatus)

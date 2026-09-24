@@ -17,19 +17,8 @@ Item
 	readonly property bool typing: streamField.activeFocus || youtubeField.activeFocus
 		|| spotifyField.activeFocus || clientIdField.activeFocus
 
-	// The radio list. Every one was checked to answer with audio and an icy-name before
-	// it went in; the notes say what kind of music to expect.
-	readonly property var stations: [
-		{ name: "Lofi Music", note: "Lo-fi beats · Zeno", url: "https://stream.zeno.fm/f3wvbbqmdg8uv" },
-		{ name: "Lofi Hip Hop Radio", note: "Lo-fi hip hop · Zeno", url: "https://stream.zeno.fm/0r0xa792kwzuv" },
-		{ name: "Lofi", note: "Lo-fi · laut.fm", url: "https://stream.laut.fm/lofi" },
-		{ name: "ChillHop", note: "Chillhop · FluxFM", url: "https://streams.fluxfm.de/Chillhop/mp3-128/streams.fluxfm.de/" },
-		{ name: "Hunter.FM Lo-Fi", note: "Lo-fi · Hunter.FM", url: "https://live.hunter.fm/lofi_high" },
-		{ name: "Fluid", note: "Instrumental hip hop · SomaFM", url: "https://ice1.somafm.com/fluid-128-mp3" },
-		{ name: "Groove Salad", note: "Chilled ambient beats · SomaFM", url: "https://ice1.somafm.com/groovesalad-128-mp3" },
-		{ name: "Deep Space One", note: "Deep ambient · SomaFM", url: "https://ice1.somafm.com/deepspaceone-128-mp3" },
-		{ name: "Drone Zone", note: "Ambient, no beats · SomaFM", url: "https://ice1.somafm.com/dronezone-128-mp3" }
-	]
+	// The radio list, owned by Main.qml and shared with the music panel.
+	required property var stations
 
 	// A text field for a link, committed on Enter or on losing focus rather than per
 	// keystroke: a URL is invalid most of the way through being typed.
@@ -399,57 +388,16 @@ Item
 				}
 
 				// Where the music comes from. Each source keeps its own choice, so trying
-				// another one and coming back finds things as they were left.
-				Row
+				// another one and coming back finds things as they were left. The music
+				// panel (the note in the title bar) is where they are browsed.
+				SourceTabs
 				{
-					id: sourceTabs
-
-					width: parent.width
-					spacing: 4
+					current: AppSettings.musicSource
+					tabWidth: (parent.width - 3 * spacing) / 4
+					tabHeight: 40
 					bottomPadding: 10
 
-					Repeater
-					{
-						model: [
-							{ key: "radio", label: "Radio" },
-							{ key: "youtube", label: "YouTube" },
-							{ key: "spotify", label: "Spotify" },
-							{ key: "custom", label: "Link" }
-						]
-
-						delegate: Button
-						{
-							id: sourceTab
-
-							required property var modelData
-
-							readonly property bool current: AppSettings.musicSource === sourceTab.modelData.key
-
-							width: (sourceTabs.width - 3 * sourceTabs.spacing) / 4
-							height: 32
-
-							background: Rectangle
-							{
-								radius: 8
-								color: sourceTab.current
-									? Qt.rgba(1, 1, 1, 0.28)
-									: sourceTab.hovered ? Qt.rgba(1, 1, 1, 0.14) : Qt.rgba(1, 1, 1, 0.06)
-							}
-
-							contentItem: Text
-							{
-								text: sourceTab.modelData.label
-								color: "white"
-								font.pixelSize: 13
-								font.bold: sourceTab.current
-								horizontalAlignment: Text.AlignHCenter
-								verticalAlignment: Text.AlignVCenter
-							}
-
-							onClicked:
-								AppSettings.musicSource = sourceTab.modelData.key
-						}
-					}
+					onPicked: (key) => AppSettings.musicSource = key
 				}
 
 				// Radio: a short list of lo-fi and ambient stations that were checked to be

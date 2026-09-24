@@ -8,6 +8,7 @@
 #include <QProcess>
 #include <QString>
 #include <QUrl>
+#include <QVariantList>
 
 #include <QtQml/qqmlregistration.h>
 
@@ -35,6 +36,13 @@ class YtDlp : public QObject
 	Q_PROPERTY(qreal installProgress READ installProgress NOTIFY installProgressChanged)
 	Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
 
+	// What the music panel lists: search results or the videos of an opened playlist, as
+	// maps with kind ("video" or "playlist"), url, title, subtitle, image and live.
+	Q_PROPERTY(QVariantList results READ results NOTIFY resultsChanged)
+	Q_PROPERTY(bool searching READ searching NOTIFY resultsChanged)
+	Q_PROPERTY(QString resultsError READ resultsError NOTIFY resultsChanged)
+	Q_PROPERTY(QString resultsTitle READ resultsTitle NOTIFY resultsChanged)
+
 	public:
 		explicit YtDlp(QObject *parent = nullptr);
 		~YtDlp() override;
@@ -43,6 +51,11 @@ class YtDlp : public QObject
 		bool	installing() const;
 		qreal	installProgress() const;
 		QString	statusText() const;
+
+		QVariantList	results() const;
+		bool			searching() const;
+		QString			resultsError() const;
+		QString			resultsTitle() const;
 
 		// True for the hosts yt-dlp is asked about: youtube.com, youtu.be, music.youtube.com.
 		static bool	handles(const QUrl &url);
@@ -58,15 +71,24 @@ class YtDlp : public QObject
 	public slots:
 		void	install();
 
+		// Searches YouTube for videos, or for playlists when asked.
+		void	search(const QString &query, bool playlists);
+
+		// Lists the videos of a playlist in results.
+		void	openPlaylist(const QString &url, const QString &title);
+
 	signals:
 		void	stateChanged();
 		void	installProgressChanged();
 
-		void	resolved(const QUrl &stream, const QString &title, const QString &channel, bool live);
+		void	resolved(const QUrl &stream, const QString &title, const QString &channel, bool live,
+					const QString &thumbnail);
+		void	resultsChanged();
 		void	resolveFailed(const QString &reason);
 
 	private slots:
 		void	onResolveFinished(int exitCode, QProcess::ExitStatus exitStatus);
+		void	onBrowseFinished(int exitCode, QProcess::ExitStatus exitStatus);
 		void	onSumsFinished();
 		void	onBinaryReadyRead();
 		void	onBinaryFinished();
@@ -75,8 +97,14 @@ class YtDlp : public QObject
 		static constexpr int	ResolveTimeoutMs = 60000;
 		static constexpr int	SelfUpdateDays = 7;
 
+		// Enough to choose from without waiting: a search listing of playlists runs to
+		// hundreds of entries, and fetching them all took 18 s where 15 take a few.
+		static constexpr int	SearchResults = 15;
+		static constexpr int	PlaylistEntries = 100;
+
 		QProcess				*_resolver = nullptr;
 		QProcess				*_updater = nullptr;
+		QProcess				*_browser = nullptr;
 		QNetworkAccessManager	_network;
 		QNetworkReply			*_download = nullptr;
 		QFile					_downloadFile;
@@ -87,7 +115,13 @@ class YtDlp : public QObject
 		QString	_errorText;
 		qreal	_installProgress = 0.0;
 
+		QVariantList	_results;
+		QString			_resultsError;
+		QString			_resultsTitle;
+		QString			_pendingTitle;
+
 		void	locate();
+		void	browse(const QStringList &arguments, const QString &title);
 		void	failInstall(const QString &reason);
 		void	prepare(QProcess *process) const;
 
