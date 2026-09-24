@@ -12,6 +12,7 @@ Rectangle
 	signal settingsRequested()
 	signal statsRequested()
 	signal musicToggled()
+	signal tasksRequested()
 
     color: rootMenu.themeColor
 
@@ -277,6 +278,60 @@ Rectangle
 	{
         anchors.right: parent.right
         height: parent.height
+
+		// The task list's drawer comes in from this side, so its button lives here too.
+		// Drawn like the stats button: a checklist of three dots and lines.
+		Button
+		{
+			id: tasksBtn
+
+			width: 40
+			height: 40
+
+			visible: AppSettings.tasksEnabled
+
+			background: Rectangle { color: tasksBtn.hovered ? "#929494" : "transparent" }
+
+			contentItem: Item
+			{
+				Column
+				{
+					anchors.centerIn: parent
+					spacing: 4
+
+					Repeater
+					{
+						model: 3
+
+						Row
+						{
+							spacing: 3
+
+							Rectangle
+							{
+								width: 3
+								height: 3
+								radius: 1.5
+								color: "#e3e3e3"
+								anchors.verticalCenter: parent.verticalCenter
+							}
+
+							Rectangle
+							{
+								width: 13
+								height: 2
+								radius: 1
+								color: "#e3e3e3"
+								anchors.verticalCenter: parent.verticalCenter
+							}
+						}
+					}
+				}
+			}
+
+			onClicked:
+				rootMenu.tasksRequested()
+		}
 
 		Button
 		{

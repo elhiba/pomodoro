@@ -76,7 +76,14 @@ Window
 		onSessionFinished: (finished, next, durationSeconds) =>
 		{
 			SoundPlayer.playAlarm()
-			sessionLog.recordSession(finished, durationSeconds)
+
+			// A finished focus session counts towards whatever task was being worked on,
+			// and the history remembers which one it was.
+			let taskId = finished === PomodoroTimer.Focus && AppSettings.tasksEnabled
+				? taskList.creditFocusSession()
+				: ""
+
+			sessionLog.recordSession(finished, durationSeconds, taskId)
 
 			// totalSeconds is the next session's length by now, which is exactly what
 			// the message wants to talk about.
@@ -104,6 +111,11 @@ Window
 	SessionLog
 	{
 		id: sessionLog
+	}
+
+	TaskList
+	{
+		id: taskList
 	}
 
 	// Also forces the singleton into existence at start-up, so the samples are decoded
@@ -154,18 +166,15 @@ Window
 
 		themeColor: mainWindow.themeColor
 
-		// Only one drawer at a time, they come in from opposite sides.
+		// Only one drawer at a time.
 		onSettingsRequested:
-		{
-			statsPanel.open = false
-			settingsPanel.open = !settingsPanel.open
-		}
+			mainWindow.toggleDrawer(settingsPanel)
 
 		onStatsRequested:
-		{
-			settingsPanel.open = false
-			statsPanel.open = !statsPanel.open
-		}
+			mainWindow.toggleDrawer(statsPanel)
+
+		onTasksRequested:
+			mainWindow.toggleDrawer(tasksPanel)
 
 		onMusicToggled:
 			MusicPlayer.toggle()
@@ -256,6 +265,45 @@ Window
 		}
 	}
 
+	// What is being worked on, under the timer. Clicking it opens the list, and with no
+	// task picked it offers to pick one, so the feature can be found from the home screen.
+	Text
+	{
+		id: activeTask
+
+		anchors.top: timerDisplay.bottom
+		anchors.topMargin: 14
+		anchors.horizontalCenter: parent.horizontalCenter
+
+		width: Math.min(implicitWidth, timerDisplay.width)
+
+		visible: AppSettings.tasksEnabled
+
+		text: taskList.activeTitle.length > 0
+			? taskList.activeTitle + "  ·  " + taskList.activeCompleted + "/" + taskList.activeEstimate
+			: taskList.openCount > 0 ? "Pick a task to work on" : "+ Add a task"
+
+		textFormat: Text.PlainText
+		color: "white"
+		opacity: activeTaskHover.hovered ? 1.0 : (taskList.activeTitle.length > 0 ? 0.9 : 0.6)
+		font.pixelSize: 16
+		font.bold: taskList.activeTitle.length > 0
+		elide: Text.ElideRight
+		horizontalAlignment: Text.AlignHCenter
+
+		HoverHandler
+		{
+			id: activeTaskHover
+			cursorShape: Qt.PointingHandCursor
+		}
+
+		TapHandler
+		{
+			onTapped:
+				mainWindow.toggleDrawer(tasksPanel)
+		}
+	}
+
 	// Last, so the drawers and their scrims sit above everything else.
 	SettingsPanel
 	{
@@ -275,9 +323,42 @@ Window
 		log: sessionLog
 	}
 
+	TasksPanel
+	{
+		id: tasksPanel
+
+		anchors.fill: parent
+		themeColor: mainWindow.themeColor
+
+		tasks: taskList
+	}
+
+	// Turning the list off while its drawer is open would leave a drawer with no button.
+	Connections
+	{
+		target: AppSettings
+
+		function onTasksEnabledChanged()
+		{
+			if (!AppSettings.tasksEnabled)
+				tasksPanel.open = false
+		}
+	}
+
+	function toggleDrawer(drawer)
+	{
+		let wanted = !drawer.open
+
+		settingsPanel.open = false
+		statsPanel.open = false
+		tasksPanel.open = false
+
+		drawer.open = wanted
+	}
+
 	// Space, R and S are single letters, so they have to stay out of the way of any
 	// text field that currently has the keyboard.
-	readonly property bool typing: settingsPanel.typing || timerDisplay.typing
+	readonly property bool typing: settingsPanel.typing || timerDisplay.typing || tasksPanel.typing
 
 	Shortcut
 	{
@@ -446,22 +527,29 @@ Window
 		sequences: ["Ctrl+,"]
 
 		onActivated:
-		{
-			statsPanel.open = false
-			settingsPanel.open = !settingsPanel.open
-		}
+			mainWindow.toggleDrawer(settingsPanel)
+	}
+
+	Shortcut
+	{
+		sequences: ["Ctrl+T"]
+		enabled: AppSettings.tasksEnabled
+
+		onActivated:
+			mainWindow.toggleDrawer(tasksPanel)
 	}
 
 	// Escape closes whichever drawer is open rather than doing nothing.
 	Shortcut
 	{
 		sequences: ["Escape"]
-		enabled: settingsPanel.open || statsPanel.open
+		enabled: settingsPanel.open || statsPanel.open || tasksPanel.open
 
 		onActivated:
 		{
 			settingsPanel.open = false
 			statsPanel.open = false
+			tasksPanel.open = false
 		}
 	}
 

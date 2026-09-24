@@ -21,3 +21,19 @@ add_test(NAME PomodoroTimer COMMAND tst_pomodorotimer)
 # The test never opens a window, but QTest still spins up a QCoreApplication; forcing the
 # offscreen platform means it also cannot trip over a runner with no display attached.
 set_tests_properties(PomodoroTimer PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
+qt_add_executable(tst_tasklist
+	tst_tasklist.cpp
+	../src/core/TaskList.cpp
+)
+
+target_include_directories(tst_tasklist PRIVATE ../src/core)
+
+target_link_libraries(tst_tasklist PRIVATE
+	Qt6::Core
+	Qt6::Qml
+	Qt6::Test
+)
+
+add_test(NAME TaskList COMMAND tst_tasklist)
+set_tests_properties(TaskList PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

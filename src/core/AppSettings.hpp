@@ -41,6 +41,9 @@ class AppSettings : public QObject
 	Q_PROPERTY(bool miniTimer READ miniTimer WRITE setMiniTimer NOTIFY miniTimerChanged)
 	Q_PROPERTY(int miniTimerX READ miniTimerX WRITE setMiniTimerX NOTIFY miniTimerXChanged)
 	Q_PROPERTY(int miniTimerY READ miniTimerY WRITE setMiniTimerY NOTIFY miniTimerYChanged)
+	// Whether the task list is offered at all. Off hides its button, drawer and the line
+	// under the timer; the tasks themselves are kept.
+	Q_PROPERTY(bool tasksEnabled READ tasksEnabled WRITE setTasksEnabled NOTIFY tasksEnabledChanged)
 
 	// Handy for the settings panel, so the bounds live in one place instead of
 	// being repeated in QML.
@@ -68,6 +71,7 @@ class AppSettings : public QObject
 		static constexpr bool	DefaultMiniTimer = true;
 		static constexpr int	DefaultMiniTimerX = -1;
 		static constexpr int	DefaultMiniTimerY = -1;
+		static constexpr bool	DefaultTasksEnabled = true;
 
 		static constexpr int	MinimumMinutes = 1;
 		static constexpr int	MaximumMinutes = 120;
@@ -96,6 +100,7 @@ class AppSettings : public QObject
 		bool	miniTimer() const;
 		int		miniTimerX() const;
 		int		miniTimerY() const;
+		bool	tasksEnabled() const;
 
 		int		minimumMinutes() const;
 		int		maximumMinutes() const;
@@ -117,6 +122,7 @@ class AppSettings : public QObject
 		void	setMiniTimer(bool value);
 		void	setMiniTimerX(int value);
 		void	setMiniTimerY(int value);
+		void	setTasksEnabled(bool value);
 
 	public slots:
 		void	restoreDefaults();
@@ -137,6 +143,7 @@ class AppSettings : public QObject
 		void	miniTimerChanged();
 		void	miniTimerXChanged();
 		void	miniTimerYChanged();
+		void	tasksEnabledChanged();
 
 	private:
 		QSettings	_store;
@@ -157,6 +164,7 @@ class AppSettings : public QObject
 		bool	_miniTimer = DefaultMiniTimer;
 		int		_miniTimerX = DefaultMiniTimerX;
 		int		_miniTimerY = DefaultMiniTimerY;
+		bool	_tasksEnabled = DefaultTasksEnabled;
 
 		void	load();
 		void	store(const char *key, const QVariant &value);

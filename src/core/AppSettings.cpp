@@ -21,6 +21,7 @@ namespace
 	const char *const	KeyMiniTimer = "window/miniTimer";
 	const char *const	KeyMiniTimerX = "window/miniTimerX";
 	const char *const	KeyMiniTimerY = "window/miniTimerY";
+	const char *const	KeyTasksEnabled = "tasks/enabled";
 }
 
 const QString	&AppSettings::defaultStreamUrl()
@@ -116,6 +117,11 @@ int	AppSettings::miniTimerX() const
 int	AppSettings::miniTimerY() const
 {
 	return _miniTimerY;
+}
+
+bool	AppSettings::tasksEnabled() const
+{
+	return _tasksEnabled;
 }
 
 int	AppSettings::minimumMinutes() const
@@ -317,6 +323,17 @@ void	AppSettings::setMiniTimerY(int value)
 	emit miniTimerYChanged();
 }
 
+void	AppSettings::setTasksEnabled(bool value)
+{
+	if (_tasksEnabled == value)
+		return;
+
+	_tasksEnabled = value;
+	store(KeyTasksEnabled, value);
+
+	emit tasksEnabledChanged();
+}
+
 void	AppSettings::restoreDefaults()
 {
 	setFocusMinutes(DefaultFocusMinutes);
@@ -332,6 +349,7 @@ void	AppSettings::restoreDefaults()
 	setAlwaysOnTop(DefaultAlwaysOnTop);
 	setCloseMinimizes(DefaultCloseMinimizes);
 	setMiniTimer(DefaultMiniTimer);
+	setTasksEnabled(DefaultTasksEnabled);
 }
 
 void	AppSettings::load()
@@ -364,6 +382,7 @@ void	AppSettings::load()
 	_miniTimer = _store.value(KeyMiniTimer, DefaultMiniTimer).toBool();
 	_miniTimerX = _store.value(KeyMiniTimerX, DefaultMiniTimerX).toInt();
 	_miniTimerY = _store.value(KeyMiniTimerY, DefaultMiniTimerY).toInt();
+	_tasksEnabled = _store.value(KeyTasksEnabled, DefaultTasksEnabled).toBool();
 }
 
 void	AppSettings::store(const char *key, const QVariant &value)

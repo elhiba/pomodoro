@@ -97,6 +97,9 @@ qt_add_executable(pomodoro
 
 	src/core/UpdateChecker.hpp
 	src/core/UpdateChecker.cpp
+
+	src/core/TaskList.hpp
+	src/core/TaskList.cpp
 )
 
 # The OS media-control bridge is the one part of the app with a different body per
@@ -181,6 +184,7 @@ set(POMODORO_QML_FILES
 	src/ui/StatsPanel.qml
 	src/ui/ResizeHandles.qml
 	src/ui/MiniTimer.qml
+	src/ui/TasksPanel.qml
 )
 
 foreach(qml_file IN LISTS POMODORO_QML_FILES)

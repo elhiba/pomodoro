@@ -46,7 +46,8 @@ class SessionLog : public QObject
 		int				recentPeakMinutes() const;
 
 	public slots:
-		void	recordSession(PomodoroTimer::Mode mode, int durationSeconds);
+		// taskId is the task list's id for what the session was spent on, empty for none.
+		void	recordSession(PomodoroTimer::Mode mode, int durationSeconds, const QString &taskId = QString());
 		void	clearHistory();
 
 	signals:

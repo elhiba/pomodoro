@@ -128,7 +128,7 @@ int	SessionLog::recentPeakMinutes() const
 	return peak;
 }
 
-void	SessionLog::recordSession(PomodoroTimer::Mode mode, int durationSeconds)
+void	SessionLog::recordSession(PomodoroTimer::Mode mode, int durationSeconds, const QString &taskId)
 {
 	if (durationSeconds <= 0)
 		return;
@@ -138,6 +138,7 @@ void	SessionLog::recordSession(PomodoroTimer::Mode mode, int durationSeconds)
 	record.finishedAt = QDateTime::currentDateTime();
 	record.mode = mode;
 	record.durationSeconds = durationSeconds;
+	record.taskId = taskId;
 
 	_records.append(record);
 
@@ -293,8 +294,8 @@ void	SessionLog::save()
 		object.insert(QStringLiteral("mode"), modeToString(record.mode));
 		object.insert(QStringLiteral("durationSeconds"), record.durationSeconds);
 
-		// Left empty for now. The task list will fill it in when it returns, so the
-		// format does not have to change then.
+		// The task the session was spent on, or empty. Stored as the task list's id
+		// rather than its title, so renaming a task does not rewrite history.
 		object.insert(QStringLiteral("taskId"), record.taskId);
 
 		array.append(object);
