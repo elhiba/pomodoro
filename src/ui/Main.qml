@@ -194,6 +194,7 @@ Window
 		anchors.top: parent.top
 
 		themeColor: mainWindow.themeColor
+		openTasks: taskList.openCount
 
 		// Only one drawer at a time.
 		onSettingsRequested:
@@ -207,9 +208,6 @@ Window
 
 		onMusicPanelRequested:
 			mainWindow.toggleDrawer(musicPanel)
-
-		onMusicToggled:
-			MusicPlayer.toggle()
 	}
 
 	// Lives here rather than inside TopMenu, which used to anchor it past its own

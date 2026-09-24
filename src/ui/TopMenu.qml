@@ -9,9 +9,11 @@ Rectangle
 
 	property color themeColor: "#12130F"
 
+	// Shown on the task button; Main.qml hands it in from the task list.
+	property int openTasks: 0
+
 	signal settingsRequested()
 	signal statsRequested()
-	signal musicToggled()
 	signal tasksRequested()
 	signal musicPanelRequested()
 
@@ -113,55 +115,96 @@ Rectangle
             rootMenu.statsRequested()
     }
 
+	// The one music button. It wears the logo of the source in use -- the station list,
+	// YouTube, Spotify, or "+" for a link of your own -- once music has been started, and
+	// a plain note before that. Clicking it opens the music panel, which is where play,
+	// pause, skip and the choice of source all live; one button instead of three keeps
+	// the title bar quiet.
 	Button
 	{
 		id: musicBtn
 
-        width: 40
-        height: 40
-
-        anchors.left: statsBtn.right
-
-        background: Rectangle
-        {
-            color: musicBtn.hovered ? "#929494" : "transparent"
-        }
-
-        icon.source: MusicPlayer.active
-            ? "assets/icons/pauseTimer.svg"
-            : "assets/icons/playTimer.svg"
-
-        // Red while the stream is refusing to start, and faded while it is still trying,
-        // so a dead URL is visible without opening the settings.
-        icon.color: MusicPlayer.failed ? "#ff8a8a" : "#e3e3e3"
-
-        opacity: MusicPlayer.status === MusicPlayer.Connecting ? 0.55 : 1.0
-
-        Behavior on opacity
-        {
-            NumberAnimation { duration: 200 }
-        }
-
-        onClicked:
-            MusicPlayer.toggle()
-    }
-
-	// Opens the music panel: stations, YouTube and Spotify, with skip controls.
-	Button
-	{
-		id: libraryBtn
-
 		width: 40
 		height: 40
 
-		anchors.left: musicBtn.right
+		anchors.left: statsBtn.right
 
-		background: Rectangle { color: libraryBtn.hovered ? "#929494" : "transparent" }
+		readonly property bool started: MusicPlayer.status !== MusicPlayer.Idle
 
-		icon.source: "assets/icons/musicNote.svg"
-		icon.color: "#e3e3e3"
-		icon.width: 20
-		icon.height: 20
+		background: Rectangle
+		{
+			color: musicBtn.hovered ? "#929494" : "transparent"
+		}
+
+		contentItem: Item
+		{
+			Image
+			{
+				id: musicLogo
+
+				anchors.centerIn: parent
+
+				width: 22
+				height: 22
+
+				// Drawn as an Image rather than a button icon so the brand colours are not
+				// tinted away.
+				source:
+				{
+					if (!musicBtn.started)
+						return "assets/icons/musicNote.svg"
+
+					switch (AppSettings.musicSource)
+					{
+						case "youtube": return "assets/icons/youtube.svg"
+						case "spotify": return "assets/icons/spotify.svg"
+						case "custom": return "assets/icons/plus.svg"
+						default: return "assets/icons/radio.svg"
+					}
+				}
+
+				sourceSize.width: 44
+				sourceSize.height: 44
+				fillMode: Image.PreserveAspectFit
+
+				// Full strength while it plays, dimmed while paused, and breathing while it
+				// connects, so the state reads without opening anything.
+				opacity: MusicPlayer.active || !musicBtn.started ? 1.0 : 0.5
+
+				SequentialAnimation on scale
+				{
+					running: MusicPlayer.status === MusicPlayer.Connecting
+						|| MusicPlayer.status === MusicPlayer.Reconnecting
+					loops: Animation.Infinite
+					alwaysRunToEnd: true
+
+					NumberAnimation { to: 0.8; duration: 600; easing.type: Easing.InOutSine }
+					NumberAnimation { to: 1.0; duration: 600; easing.type: Easing.InOutSine }
+				}
+			}
+
+			// A stream that will not start gets a red mark rather than a silent logo.
+			Rectangle
+			{
+				anchors.right: musicLogo.right
+				anchors.bottom: musicLogo.bottom
+				anchors.rightMargin: -3
+				anchors.bottomMargin: -3
+
+				width: 9
+				height: 9
+				radius: 4.5
+
+				visible: MusicPlayer.failed
+				color: "#ff5c5c"
+				border.color: "white"
+				border.width: 1.5
+			}
+		}
+
+		ToolTip.visible: musicBtn.hovered
+		ToolTip.delay: 600
+		ToolTip.text: "Music"
 
 		onClicked:
 			rootMenu.musicPanelRequested()
@@ -177,8 +220,8 @@ Rectangle
 	{
 		id: nowPlaying
 
-		anchors.left: libraryBtn.right
-		anchors.leftMargin: 8
+		anchors.left: musicBtn.right
+		anchors.leftMargin: 6
 		anchors.verticalCenter: parent.verticalCenter
 
 		width: Math.max(0, pomodoroText.x - nowPlaying.x - 12)
@@ -210,38 +253,9 @@ Rectangle
 				? ""
 				: MusicPlayer.title
 
-		// The logo of what is playing -- the station list, YouTube, Spotify or a link -- so
-		// it is clear at a glance where the sound is coming from.
-		Image
-		{
-			id: sourceLogo
-
-			anchors.left: parent.left
-			anchors.verticalCenter: parent.verticalCenter
-
-			width: 20
-			height: 20
-
-			source:
-			{
-				switch (AppSettings.musicSource)
-				{
-					case "youtube": return "assets/icons/youtube.svg"
-					case "spotify": return "assets/icons/spotify.svg"
-					case "custom": return "assets/icons/musicNote.svg"
-					default: return "assets/icons/radio.svg"
-				}
-			}
-
-			sourceSize.width: 40
-			sourceSize.height: 40
-			fillMode: Image.PreserveAspectFit
-		}
-
 		Column
 		{
-			anchors.left: sourceLogo.right
-			anchors.leftMargin: 8
+			anchors.left: parent.left
 			anchors.right: parent.right
 			anchors.verticalCenter: parent.verticalCenter
 			spacing: 1
@@ -339,25 +353,83 @@ Rectangle
         anchors.right: parent.right
         height: parent.height
 
-		// The task list's drawer comes in from this side, so its button lives here too.
-		Button
+		// The task list's drawer comes in from this side, so its button lives here too --
+		// but set apart from minimise, maximise and close by a gap and a divider, and
+		// drawn as a rounded button with the number of open tasks, so it reads as part of
+		// the app rather than one more window control.
+		Item
 		{
-			id: tasksBtn
+			width: tasksBtn.visible ? tasksBtn.width + 21 : 0
+			height: parent.height
 
-			width: 40
-			height: 40
+			Button
+			{
+				id: tasksBtn
 
-			visible: AppSettings.tasksEnabled
+				anchors.left: parent.left
+				anchors.verticalCenter: parent.verticalCenter
 
-			background: Rectangle { color: tasksBtn.hovered ? "#929494" : "transparent" }
+				width: 36
+				height: 32
 
-			icon.source: "assets/icons/tasks.svg"
-			icon.color: "#e3e3e3"
-			icon.width: 22
-			icon.height: 22
+				visible: AppSettings.tasksEnabled
 
-			onClicked:
-				rootMenu.tasksRequested()
+				background: Rectangle
+				{
+					radius: 8
+					color: tasksBtn.hovered ? Qt.rgba(1, 1, 1, 0.22) : Qt.rgba(1, 1, 1, 0.1)
+				}
+
+				icon.source: "assets/icons/tasks.svg"
+				icon.color: "#ffffff"
+				icon.width: 20
+				icon.height: 20
+
+				ToolTip.visible: tasksBtn.hovered
+				ToolTip.delay: 600
+				ToolTip.text: "Tasks (Ctrl+T)"
+
+				onClicked:
+					rootMenu.tasksRequested()
+
+				// How many tasks are still open, when there are any.
+				Rectangle
+				{
+					anchors.right: parent.right
+					anchors.top: parent.top
+					anchors.rightMargin: -5
+					anchors.topMargin: -4
+
+					visible: rootMenu.openTasks > 0
+					width: Math.max(16, countText.implicitWidth + 8)
+					height: 16
+					radius: 8
+					color: "white"
+
+					Text
+					{
+						id: countText
+
+						anchors.centerIn: parent
+						text: rootMenu.openTasks > 99 ? "99+" : rootMenu.openTasks
+						color: rootMenu.themeColor
+						font.pixelSize: 10
+						font.bold: true
+					}
+				}
+			}
+
+			Rectangle
+			{
+				anchors.right: parent.right
+				anchors.rightMargin: 10
+				anchors.verticalCenter: parent.verticalCenter
+
+				visible: tasksBtn.visible
+				width: 1
+				height: 20
+				color: Qt.rgba(1, 1, 1, 0.3)
+			}
 		}
 
 		Button
