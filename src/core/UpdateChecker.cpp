@@ -33,10 +33,15 @@ namespace
 #ifdef Q_OS_WIN
 	// Inno Setup's uninstall entry: the AppId from packaging/windows/pomodoro.iss plus
 	// "_is1". Its InstallLocation is where the installer put the app, which is how a copy
-	// tells whether it is the installed one or an unzipped portable folder.
-	const char *const	UninstallKey =
-		"HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"
+	// tells whether it is the installed one or an unzipped portable folder. It lives under
+	// HKCU for the default per-user install and under HKLM when the installer's dialog was
+	// used to install for everyone into Program Files.
+	const char *const	UninstallSubkey =
+		"\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"
 		"{9F1C4A2E-7B83-4D56-9C21-0E5A8D3B6F14}_is1";
+
+	// Set by detectInstallKind() when the install found was the all-users one.
+	bool	installedForAllUsers = false;
 #endif
 }
 
@@ -464,6 +469,13 @@ void	UpdateChecker::launch(const QString &path)
 				QStringLiteral("/RELAUNCH=1")
 			};
 
+			// Updating an install in Program Files has to go back there, which takes
+			// administrator rights: Windows asks once, as it did the first time.
+#ifdef Q_OS_WIN
+			if (installedForAllUsers)
+				arguments.append(QStringLiteral("/ALLUSERS"));
+#endif
+
 			if (!QProcess::startDetached(path, arguments))
 			{
 				setStatus(Failed, QStringLiteral("Could not start the installer"));
@@ -540,17 +552,24 @@ void	UpdateChecker::launch(const QString &path)
 UpdateChecker::InstallKind	UpdateChecker::detectInstallKind()
 {
 #if defined(Q_OS_WIN)
-	QSettings	uninstall(QLatin1String(UninstallKey), QSettings::NativeFormat);
-	QString		location = uninstall.value(QStringLiteral("InstallLocation")).toString();
-
-	if (location.isEmpty())
-		return NotInstallable;
-
-	QString	installed = QDir(location).canonicalPath();
 	QString	running = QDir(QCoreApplication::applicationDirPath()).canonicalPath();
 
-	if (!installed.isEmpty() && installed.compare(running, Qt::CaseInsensitive) == 0)
-		return WindowsInstaller;
+	for (const char *hive : { "HKEY_CURRENT_USER", "HKEY_LOCAL_MACHINE" })
+	{
+		QSettings	uninstall(QLatin1String(hive) + QLatin1String(UninstallSubkey), QSettings::NativeFormat);
+		QString		location = uninstall.value(QStringLiteral("InstallLocation")).toString();
+
+		if (location.isEmpty())
+			continue;
+
+		QString	installed = QDir(location).canonicalPath();
+
+		if (!installed.isEmpty() && installed.compare(running, Qt::CaseInsensitive) == 0)
+		{
+			installedForAllUsers = qstrcmp(hive, "HKEY_LOCAL_MACHINE") == 0;
+			return WindowsInstaller;
+		}
+	}
 
 	return NotInstallable;
 #elif defined(Q_OS_MACOS)

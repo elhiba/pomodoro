@@ -143,13 +143,26 @@ void	registerShellIdentity()
 
 	QString	target = QDir::toNativeSeparators(QCoreApplication::applicationFilePath());
 
-	// Left alone once it points at this copy. Rewriting it on every launch would churn
-	// the Start menu for nothing; rewriting it when it points somewhere else is what
-	// keeps a moved or updated copy -- the Windows build ships as a portable folder --
-	// from leaving a shortcut aimed at an executable that is no longer there.
+	// An installation for all users already has its entry in the shared Start menu, with
+	// the same AppUserModelID, so the media flyout can name the app from that. A second,
+	// per-user entry would only put Pomodoro in the Start menu twice.
+	QString	common = qEnvironmentVariable("ProgramData")
+		+ QStringLiteral("/Microsoft/Windows/Start Menu/Programs/") + QLatin1String(ShortcutName);
+
+	if (QFile::exists(common))
+		return;
+
+	// Left alone once it points at this copy, and left alone when it points at another
+	// copy that is still there: a second copy -- a build tree, an unzipped portable
+	// folder -- once took the entry over from the installed app every time it ran, and
+	// the Start menu then opened a build that could not start outside a developer's
+	// shell. It is only rewritten when the executable it names has gone, which is what
+	// keeps a moved portable folder from leaving a dead shortcut behind.
 	if (QFile::exists(shortcutPath))
 	{
-		if (shortcutTarget(shortcutPath).compare(target, Qt::CaseInsensitive) == 0)
+		QString	current = shortcutTarget(shortcutPath);
+
+		if (current.compare(target, Qt::CaseInsensitive) == 0 || QFile::exists(current))
 			return;
 	}
 	else if (!QDir().mkpath(programs))
