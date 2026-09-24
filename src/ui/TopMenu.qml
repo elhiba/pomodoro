@@ -210,10 +210,40 @@ Rectangle
 				? ""
 				: MusicPlayer.title
 
+		// The logo of what is playing -- the station list, YouTube, Spotify or a link -- so
+		// it is clear at a glance where the sound is coming from.
+		Image
+		{
+			id: sourceLogo
+
+			anchors.left: parent.left
+			anchors.verticalCenter: parent.verticalCenter
+
+			width: 20
+			height: 20
+
+			source:
+			{
+				switch (AppSettings.musicSource)
+				{
+					case "youtube": return "assets/icons/youtube.svg"
+					case "spotify": return "assets/icons/spotify.svg"
+					case "custom": return "assets/icons/musicNote.svg"
+					default: return "assets/icons/radio.svg"
+				}
+			}
+
+			sourceSize.width: 40
+			sourceSize.height: 40
+			fillMode: Image.PreserveAspectFit
+		}
+
 		Column
 		{
+			anchors.left: sourceLogo.right
+			anchors.leftMargin: 8
+			anchors.right: parent.right
 			anchors.verticalCenter: parent.verticalCenter
-			width: parent.width
 			spacing: 1
 
 			Text
@@ -310,7 +340,6 @@ Rectangle
         height: parent.height
 
 		// The task list's drawer comes in from this side, so its button lives here too.
-		// Drawn like the stats button: a checklist of three dots and lines.
 		Button
 		{
 			id: tasksBtn
@@ -322,42 +351,10 @@ Rectangle
 
 			background: Rectangle { color: tasksBtn.hovered ? "#929494" : "transparent" }
 
-			contentItem: Item
-			{
-				Column
-				{
-					anchors.centerIn: parent
-					spacing: 4
-
-					Repeater
-					{
-						model: 3
-
-						Row
-						{
-							spacing: 3
-
-							Rectangle
-							{
-								width: 3
-								height: 3
-								radius: 1.5
-								color: "#e3e3e3"
-								anchors.verticalCenter: parent.verticalCenter
-							}
-
-							Rectangle
-							{
-								width: 13
-								height: 2
-								radius: 1
-								color: "#e3e3e3"
-								anchors.verticalCenter: parent.verticalCenter
-							}
-						}
-					}
-				}
-			}
+			icon.source: "assets/icons/tasks.svg"
+			icon.color: "#e3e3e3"
+			icon.width: 22
+			icon.height: 22
 
 			onClicked:
 				rootMenu.tasksRequested()

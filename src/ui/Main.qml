@@ -343,7 +343,6 @@ Window
 
 		anchors.fill: parent
 		themeColor: mainWindow.themeColor
-		stations: mainWindow.stations
 	}
 
 	StatsPanel
@@ -460,7 +459,7 @@ Window
 
 	// Space, R and S are single letters, so they have to stay out of the way of any
 	// text field that currently has the keyboard.
-	readonly property bool typing: settingsPanel.typing || timerDisplay.typing || tasksPanel.typing
+	readonly property bool typing: timerDisplay.typing || tasksPanel.typing
 		|| musicPanel.typing
 
 	Shortcut

@@ -245,6 +245,9 @@ qt_add_qml_module(pomodoro
 		assets/icons/skipPrevious.svg
 		assets/icons/playSolid.svg
 		assets/icons/pauseSolid.svg
+		assets/icons/volume.svg
+		assets/icons/volumeOff.svg
+		assets/icons/tasks.svg
 		assets/icons/pomodoroLogo.png
 		assets/icons/pomodoroLogoTransport.png
 

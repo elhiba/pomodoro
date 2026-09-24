@@ -25,7 +25,7 @@ Item
 	signal skipRequested(int step)
 
 	readonly property bool typing: youtubeSearch.activeFocus || spotifySearch.activeFocus
-		|| linkField.activeFocus
+		|| linkField.activeFocus || clientIdField.activeFocus
 
 	readonly property string source: AppSettings.musicSource
 
@@ -278,13 +278,126 @@ Item
 			}
 		}
 
+		// ---------------------------------------------------------------- volume
+
+		// The music's volume and whether it plays only while focusing -- the two things
+		// changed most often, kept next to the music rather than in the settings.
+		Item
+		{
+			id: mixer
+
+			anchors.top: nowPlaying.bottom
+			anchors.topMargin: 6
+			anchors.left: parent.left
+			anchors.right: parent.right
+			anchors.leftMargin: 14
+			anchors.rightMargin: 14
+
+			height: 36
+
+			Image
+			{
+				id: volumeIcon
+
+				anchors.left: parent.left
+				anchors.leftMargin: 4
+				anchors.verticalCenter: parent.verticalCenter
+
+				width: 18
+				height: 18
+				source: AppSettings.musicVolume === 0 ? "assets/icons/volumeOff.svg" : "assets/icons/volume.svg"
+				sourceSize.width: 36
+				sourceSize.height: 36
+				opacity: 0.8
+			}
+
+			Slider
+			{
+				id: volumeSlider
+
+				anchors.left: volumeIcon.right
+				anchors.leftMargin: 8
+				anchors.right: focusChip.left
+				anchors.rightMargin: 12
+				anchors.verticalCenter: parent.verticalCenter
+
+				// Spotify has its own volume; this one would change nothing there.
+				visible: rootPanel.source !== "spotify"
+
+				from: 0
+				to: 1
+				value: AppSettings.musicVolume
+
+				onMoved:
+					AppSettings.musicVolume = volumeSlider.value
+
+				background: Rectangle
+				{
+					x: volumeSlider.leftPadding
+					y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
+					width: volumeSlider.availableWidth
+					height: 4
+					radius: 2
+					color: Qt.rgba(1, 1, 1, 0.2)
+
+					Rectangle
+					{
+						width: volumeSlider.visualPosition * parent.width
+						height: parent.height
+						radius: 2
+						color: "white"
+					}
+				}
+
+				handle: Rectangle
+				{
+					x: volumeSlider.leftPadding + volumeSlider.visualPosition * (volumeSlider.availableWidth - width)
+					y: volumeSlider.topPadding + volumeSlider.availableHeight / 2 - height / 2
+					width: 14
+					height: 14
+					radius: 7
+					color: "white"
+				}
+			}
+
+			Text
+			{
+				anchors.left: volumeIcon.right
+				anchors.leftMargin: 8
+				anchors.verticalCenter: parent.verticalCenter
+
+				visible: !volumeSlider.visible
+				text: "Volume is set in Spotify"
+				color: Qt.rgba(1, 1, 1, 0.5)
+				font.pixelSize: 12
+			}
+
+			Chip
+			{
+				id: focusChip
+
+				anchors.right: parent.right
+				anchors.verticalCenter: parent.verticalCenter
+
+				label: "Focus only"
+				selected: AppSettings.musicFollowsFocus
+
+				ToolTip.visible: hovered
+				ToolTip.delay: 500
+				ToolTip.text: "Play only while a focus session is running, and pause for breaks"
+
+				onClicked:
+					AppSettings.musicFollowsFocus = !AppSettings.musicFollowsFocus
+			}
+		}
+
 		// ---------------------------------------------------------------- body
 
 		Item
 		{
 			id: body
 
-			anchors.top: nowPlaying.bottom
+			anchors.top: mixer.bottom
 			anchors.bottom: parent.bottom
 			anchors.left: parent.left
 			anchors.right: parent.right
@@ -579,9 +692,50 @@ Item
 						width: parent.width
 						text: MusicPlayer.spotify.clientId.length > 0
 							? "Connect your Spotify account to search and play your music here. Spotify Premium is needed."
-							: "Spotify needs setting up first: add a Client ID in Settings, under Music."
+							: "Spotify needs a Client ID first."
 						color: "white"
 						font.pixelSize: 13
+						wrapMode: Text.WordWrap
+						horizontalAlignment: Text.AlignHCenter
+					}
+
+					Text
+					{
+						width: parent.width
+						visible: MusicPlayer.spotify.statusText.length > 0 && !MusicPlayer.spotify.connecting
+							&& MusicPlayer.spotify.clientId.length > 0
+						text: MusicPlayer.spotify.statusText
+						textFormat: Text.PlainText
+						color: Qt.rgba(1, 1, 1, 0.6)
+						font.pixelSize: 11
+						wrapMode: Text.WordWrap
+						horizontalAlignment: Text.AlignHCenter
+					}
+
+					// Only needed when the build carries no Client ID of its own.
+					SearchField
+					{
+						id: clientIdField
+
+						width: parent.width
+						visible: MusicPlayer.spotify.builtInClientId.length === 0
+						text: AppSettings.spotifyClientId
+						placeholderText: "Spotify Client ID, then Enter"
+						iconSource: "assets/icons/spotify.svg"
+
+						onSubmitted: (value) => AppSettings.spotifyClientId = value
+					}
+
+					TextEdit
+					{
+						width: parent.width
+						visible: clientIdField.visible && MusicPlayer.spotify.clientId.length === 0
+
+						text: "Create an app at developer.spotify.com/dashboard, choose Web API, add the redirect URI " + MusicPlayer.spotify.redirectUri + " and paste its Client ID above."
+						readOnly: true
+						selectByMouse: true
+						color: Qt.rgba(1, 1, 1, 0.5)
+						font.pixelSize: 11
 						wrapMode: Text.WordWrap
 						horizontalAlignment: Text.AlignHCenter
 					}
@@ -644,6 +798,39 @@ Item
 
 							onClicked:
 								MusicPlayer.spotify.connectAccount()
+						}
+					}
+
+					Row
+					{
+						width: parent.width
+						spacing: 8
+
+						Text
+						{
+							anchors.verticalCenter: parent.verticalCenter
+							width: parent.width - disconnectChip.width - 8
+
+							text: MusicPlayer.spotify.accountName.length > 0
+								? "Signed in as " + MusicPlayer.spotify.accountName
+								: "Signed in to Spotify"
+							textFormat: Text.PlainText
+							color: "#b6f0b6"
+							font.pixelSize: 12
+							elide: Text.ElideRight
+						}
+
+						Chip
+						{
+							id: disconnectChip
+
+							label: "Disconnect"
+
+							onClicked:
+							{
+								rootPanel.spotifySection = ""
+								MusicPlayer.spotify.disconnectAccount()
+							}
 						}
 					}
 
