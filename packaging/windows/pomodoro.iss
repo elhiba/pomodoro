@@ -74,9 +74,19 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; AppUserModelI
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName}"; Flags: nowait postinstall skipifsilent
+; The in-app updater runs this installer with /SILENT /RELAUNCH=1 after the app has quit,
+; so the new version comes back up on its own. A silent install started any other way
+; leaves the app closed, as before.
+Filename: "{app}\{#AppExeName}"; Flags: nowait; Check: ShouldRelaunch
 
 [UninstallDelete]
 ; Settings live in the registry and the session history under AppData; both are left
 ; alone on uninstall so reinstalling does not lose a streak. Only the unpacked caches
 ; this install created are cleared.
 Type: filesandordirs; Name: "{localappdata}\{#AppPublisher}\pomodoro\cache"
+
+[Code]
+function ShouldRelaunch: Boolean;
+begin
+  Result := WizardSilent and (ExpandConstant('{param:relaunch|0}') = '1');
+end;

@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 
 import Pomodoro
 
@@ -550,6 +551,138 @@ Window
 			settingsPanel.open = false
 			statsPanel.open = false
 			tasksPanel.open = false
+		}
+	}
+
+	// Every launch asks GitHub once whether there is something newer, a few seconds in so
+	// it never competes with the window coming up. Nothing is shown unless there is.
+	Timer
+	{
+		interval: 4000
+		running: true
+
+		onTriggered:
+			UpdateChecker.check()
+	}
+
+	// The offer to update, along the bottom of the home screen. "Later" puts it away for
+	// this run only; the next launch asks again.
+	Rectangle
+	{
+		id: updateBanner
+
+		property bool dismissed: false
+
+		readonly property bool wanted: UpdateChecker.updateAvailable && !updateBanner.dismissed
+
+		anchors.horizontalCenter: parent.horizontalCenter
+		anchors.bottom: parent.bottom
+		anchors.bottomMargin: updateBanner.wanted ? 18 : -updateBanner.height - 10
+
+		Behavior on anchors.bottomMargin
+		{
+			NumberAnimation { duration: 300; easing.type: Easing.OutCubic }
+		}
+
+		visible: updateBanner.wanted || updateBanner.anchors.bottomMargin > -updateBanner.height - 10
+
+		width: Math.min(parent.width - 32, bannerRow.implicitWidth + 36)
+		height: 48
+		radius: 12
+
+		color: Qt.darker(mainWindow.themeColor, 1.35)
+		border.color: Qt.rgba(1, 1, 1, 0.28)
+		border.width: 1
+
+		Row
+		{
+			id: bannerRow
+
+			anchors.centerIn: parent
+			spacing: 14
+
+			Text
+			{
+				anchors.verticalCenter: parent.verticalCenter
+
+				// While downloading or installing, the status line is the news; before
+				// that, just what is on offer.
+				text: UpdateChecker.busy || UpdateChecker.status === UpdateChecker.Failed
+					? UpdateChecker.statusText
+					: "Pomodoro " + UpdateChecker.latestVersion + " is available"
+
+				color: UpdateChecker.status === UpdateChecker.Failed ? "#ffb4b4" : "white"
+				font.pixelSize: 14
+				elide: Text.ElideRight
+				width: Math.min(implicitWidth, mainWindow.width - 300)
+			}
+
+			BannerButton
+			{
+				visible: !UpdateChecker.busy
+				primary: true
+				label: UpdateChecker.status === UpdateChecker.Failed
+					? "Try again"
+					: UpdateChecker.canInstall ? "Update now" : "Download"
+
+				onClicked:
+					UpdateChecker.installUpdate()
+			}
+
+			BannerButton
+			{
+				visible: !UpdateChecker.busy
+				label: "Later"
+
+				onClicked:
+					updateBanner.dismissed = true
+			}
+		}
+
+		// The download's progress, along the banner's bottom edge.
+		Rectangle
+		{
+			anchors.left: parent.left
+			anchors.bottom: parent.bottom
+			anchors.margins: 1
+
+			visible: UpdateChecker.status === UpdateChecker.Downloading
+			width: (parent.width - 2) * UpdateChecker.downloadProgress
+			height: 3
+			radius: 1.5
+			color: "white"
+		}
+	}
+
+	component BannerButton: Button
+	{
+		id: bannerBtn
+
+		property string label: ""
+		property bool primary: false
+
+		anchors.verticalCenter: parent ? parent.verticalCenter : undefined
+
+		height: 32
+		leftPadding: 14
+		rightPadding: 14
+
+		background: Rectangle
+		{
+			radius: 8
+			color: bannerBtn.primary
+				? (bannerBtn.hovered ? "#ffffff" : Qt.rgba(1, 1, 1, 0.9))
+				: (bannerBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(1, 1, 1, 0.08))
+		}
+
+		contentItem: Text
+		{
+			text: bannerBtn.label
+			color: bannerBtn.primary ? "#333333" : "white"
+			font.pixelSize: 13
+			font.bold: bannerBtn.primary
+			horizontalAlignment: Text.AlignHCenter
+			verticalAlignment: Text.AlignVCenter
 		}
 	}
 

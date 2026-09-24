@@ -473,8 +473,8 @@ Item
 				}
 
 				// One button with two jobs: it looks for a newer release, and once it has
-				// found one it becomes the way to go and get it. The app never downloads
-				// or replaces itself -- the release page is where the user decides.
+				// found one it becomes the way to install it -- in place where this copy
+				// knows how to replace itself, through the release page where it does not.
 				Button
 				{
 					id: updateBtn
@@ -505,12 +505,18 @@ Item
 					{
 						text:
 						{
-							if (UpdateChecker.busy)
+							if (UpdateChecker.status === UpdateChecker.Checking)
 								return "Checking…"
 
-							return UpdateChecker.updateAvailable
-								? "Get version " + UpdateChecker.latestVersion
-								: "Check for updates"
+							if (UpdateChecker.status === UpdateChecker.Downloading)
+								return "Downloading… " + Math.round(UpdateChecker.downloadProgress * 100) + "%"
+
+							if (!UpdateChecker.updateAvailable)
+								return "Check for updates"
+
+							return UpdateChecker.canInstall
+								? "Update to " + UpdateChecker.latestVersion
+								: "Get version " + UpdateChecker.latestVersion
 						}
 
 						color: "white"
@@ -525,7 +531,7 @@ Item
 						SoundPlayer.playClick()
 
 						if (UpdateChecker.updateAvailable)
-							UpdateChecker.openDownloadPage()
+							UpdateChecker.installUpdate()
 						else
 							UpdateChecker.check()
 					}
