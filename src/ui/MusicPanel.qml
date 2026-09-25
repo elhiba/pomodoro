@@ -40,7 +40,24 @@ Item
 		|| stationLinkField.activeFocus || stationNameField.activeFocus
 		|| clientIdField.activeFocus || spotifyLinkField.activeFocus || rootPanel.searchKeyTyping
 
-	readonly property string source: AppSettings.musicSource
+	// The tab being looked at. Not the music: browsing YouTube while the radio plays
+	// leaves the radio playing, and only picking something to play moves the music over
+	// (takeOver). Reset to the playing source each time the panel opens.
+	property string source: AppSettings.musicSource
+
+	// What is actually playing.
+	readonly property string playingSource: AppSettings.musicSource
+
+	// Makes key the playing source, stopping whatever played before, so the pick that
+	// follows starts only what was picked -- not the new source's old choice as well.
+	function takeOver(key)
+	{
+		if (AppSettings.musicSource === key)
+			return
+
+		MusicPlayer.stop()
+		AppSettings.musicSource = key
+	}
 
 	visible: rootPanel.open || card.opacity > 0
 
@@ -112,7 +129,7 @@ Item
 
 				current: rootPanel.source
 
-				onPicked: (key) => AppSettings.musicSource = key
+				onPicked: (key) => rootPanel.source = key
 			}
 
 			Button
@@ -192,7 +209,7 @@ Item
 					height: 30
 
 					visible: !artImage.visible
-					source: rootPanel.iconFor(rootPanel.source)
+					source: rootPanel.iconFor(rootPanel.playingSource)
 					sourceSize.width: 64
 					sourceSize.height: 64
 				}
@@ -280,7 +297,7 @@ Item
 				// developer key); hidden rather than offered and refused.
 				TransportButton
 				{
-					visible: rootPanel.source === "spotify" && MusicPlayer.spotify.canSearch
+					visible: rootPanel.playingSource === "spotify" && MusicPlayer.spotify.canSearch
 						&& MusicPlayer.spotify.hasCurrentTrack
 					iconSource: MusicPlayer.spotify.currentLiked ? "assets/icons/heartFilled.svg" : "assets/icons/heart.svg"
 					iconColor: MusicPlayer.spotify.currentLiked ? "#1ed760" : "white"
@@ -372,33 +389,17 @@ Item
 
 			// Songs and videos only: a radio station or a live stream has no length.
 			visible: MusicPlayer.seekable
-			height: MusicPlayer.seekable ? 24 : 0
+			height: MusicPlayer.seekable ? 46 : 0
 
-			Text
-			{
-				id: elapsedText
-
-				anchors.left: parent.left
-				anchors.verticalCenter: parent.verticalCenter
-
-				width: 38
-				text: rootPanel.clock(seekBar.dragging
-					? seekBar.shownValue * MusicPlayer.duration
-					: MusicPlayer.position)
-				color: Qt.rgba(1, 1, 1, 0.7)
-				font.pixelSize: 11
-				font.family: "JetBrains Mono"
-			}
-
+			// Full width with the times underneath, as in One UI's player.
 			SquigglySlider
 			{
 				id: seekBar
 
-				anchors.left: elapsedText.right
-				anchors.right: totalText.left
-				anchors.leftMargin: 6
-				anchors.rightMargin: 6
-				anchors.verticalCenter: parent.verticalCenter
+				anchors.top: parent.top
+				anchors.left: parent.left
+				anchors.right: parent.right
+				height: 30
 
 				value: MusicPlayer.duration > 0 ? MusicPlayer.position / MusicPlayer.duration : 0
 				playing: MusicPlayer.status === MusicPlayer.Playing
@@ -408,17 +409,26 @@ Item
 
 			Text
 			{
-				id: totalText
+				anchors.left: parent.left
+				anchors.leftMargin: 4
+				anchors.top: seekBar.bottom
 
+				text: rootPanel.clock(seekBar.dragging
+					? seekBar.shownValue * MusicPlayer.duration
+					: MusicPlayer.position)
+				color: Qt.rgba(1, 1, 1, 0.7)
+				font.pixelSize: 11
+			}
+
+			Text
+			{
 				anchors.right: parent.right
-				anchors.verticalCenter: parent.verticalCenter
+				anchors.rightMargin: 4
+				anchors.top: seekBar.bottom
 
-				width: 38
-				horizontalAlignment: Text.AlignRight
 				text: rootPanel.clock(MusicPlayer.duration)
 				color: Qt.rgba(1, 1, 1, 0.7)
 				font.pixelSize: 11
-				font.family: "JetBrains Mono"
 			}
 		}
 
@@ -467,7 +477,7 @@ Item
 
 				// A remote-controlled Spotify has its own volume; this one would change
 				// nothing there. The built-in player follows it.
-				visible: rootPanel.source !== "spotify" || MusicPlayer.spotify.builtInPlayer
+				visible: rootPanel.playingSource !== "spotify" || MusicPlayer.spotify.builtInPlayer
 
 				from: 0
 				to: 1
@@ -687,6 +697,7 @@ Item
 									return
 								}
 
+								rootPanel.takeOver("radio")
 								AppSettings.radioUrl = stationCell.modelData.url
 
 								if (!MusicPlayer.active)
@@ -875,6 +886,7 @@ Item
 							if (!saveStationBtn.enabled)
 								return
 
+							rootPanel.takeOver("radio")
 							rootPanel.stationAdded(stationNameField.text.trim(), stationProbe.note,
 								stationProbe.url)
 							rootPanel.closeStationForm()
@@ -1297,7 +1309,10 @@ Item
 						if (item.kind !== "track" && MusicPlayer.spotify.builtInPlayer)
 							MusicPlayer.spotify.openContext(item.uri, item.title)
 						else
+						{
+							rootPanel.takeOver("spotify")
 							MusicPlayer.playSpotifyResult(index)
+						}
 					}
 				}
 
@@ -1358,7 +1373,11 @@ Item
 							anchors.verticalCenter: parent.verticalCenter
 							label: "Play all"
 
-							onClicked: rootPanel.spotifyPicked(MusicPlayer.spotify.openedUri)
+							onClicked:
+							{
+								rootPanel.takeOver("spotify")
+								rootPanel.spotifyPicked(MusicPlayer.spotify.openedUri)
+							}
 						}
 					}
 
@@ -1379,7 +1398,11 @@ Item
 						queueable: true
 						onQueueRequested: (item) => MusicPlayer.spotify.addToQueue(item.uri)
 
-						onActivated: (index, item) => MusicPlayer.playSpotifyResult(index)
+						onActivated: (index, item) =>
+						{
+							rootPanel.takeOver("spotify")
+							MusicPlayer.playSpotifyResult(index)
+						}
 					}
 				}
 
@@ -1859,7 +1882,7 @@ Item
 	property string youtubeQuery: ""
 	property string spotifySection: ""
 
-	readonly property bool canSkip: rootPanel.source === "radio" || MusicPlayer.canSkip
+	readonly property bool canSkip: rootPanel.playingSource === "radio" || MusicPlayer.canSkip
 
 	function iconFor(key)
 	{
@@ -1959,6 +1982,7 @@ Item
 
 	function playYouTube(index)
 	{
+		rootPanel.takeOver("youtube")
 		MusicPlayer.playYouTubeQueue(MusicPlayer.youtube.results, index)
 	}
 
@@ -1972,6 +1996,10 @@ Item
 	// playlists, or the YouTube playlist they pasted in the settings.
 	onOpenChanged:
 	{
+		// Opens on what is playing, whichever tab was left open last time.
+		if (rootPanel.open)
+			rootPanel.source = AppSettings.musicSource
+
 		rootPanel.fillSpotify()
 		rootPanel.fillYouTube()
 	}
