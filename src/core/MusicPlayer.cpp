@@ -56,6 +56,23 @@ MusicPlayer::MusicPlayer(QObject *parent)
 	connect(_controls, &MediaControls::toggleRequested, this, &MusicPlayer::toggle);
 	connect(_controls, &MediaControls::stopRequested, this, &MusicPlayer::stop);
 
+	// Next and previous from the desktop: the playlist's own for Spotify and YouTube,
+	// the next station for the radio list.
+	connect(_controls, &MediaControls::nextRequested, this, [this]()
+	{
+		if (_kind == Stream)
+			emit stationSkipRequested(1);
+		else
+			next();
+	});
+	connect(_controls, &MediaControls::previousRequested, this, [this]()
+	{
+		if (_kind == Stream)
+			emit stationSkipRequested(-1);
+		else
+			previous();
+	});
+
 	_ytDlp = new YtDlp(this);
 
 	connect(_ytDlp, &YtDlp::resolved, this, &MusicPlayer::onYouTubeResolved);

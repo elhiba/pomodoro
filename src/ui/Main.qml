@@ -524,6 +524,17 @@ Window
 
 	// Next and previous. On the radio list that is the next station, kept playing if it
 	// was; everywhere else MusicPlayer knows what to do.
+	// Next and previous pressed in the desktop's media panel while a station plays.
+	Connections
+	{
+		target: MusicPlayer
+
+		function onStationSkipRequested(step)
+		{
+			mainWindow.skipMusic(step)
+		}
+	}
+
 	function skipMusic(step)
 	{
 		if (AppSettings.musicSource !== "radio")

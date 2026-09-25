@@ -173,6 +173,10 @@ class MusicPlayer : public QObject
 		void	queueChanged();
 		void	positionChanged();
 
+		// Skip asked for from outside the app (the desktop's media panel, media keys)
+		// while the radio list plays: the list lives in Main.qml, which moves station.
+		void	stationSkipRequested(int step);
+
 		// The YouTube queue moved to another video. Main.qml records it as the YouTube
 		// choice so the app comes back to it next time.
 		void	youtubeTrackChanged(const QString &url);

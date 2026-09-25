@@ -317,6 +317,12 @@ namespace
 					case SystemMediaTransportControlsButton_Stop:
 						emit stopRequested();
 						break;
+					case SystemMediaTransportControlsButton_Next:
+						emit nextRequested();
+						break;
+					case SystemMediaTransportControlsButton_Previous:
+						emit previousRequested();
+						break;
 					default:
 						break;
 				}
@@ -454,12 +460,12 @@ namespace
 
 				requestThumbnail();
 
-				// A live stream: play, pause and stop are the whole vocabulary.
+				// Next and previous move through a playlist, or between radio stations.
 				_controls->put_IsPlayEnabled(true);
 				_controls->put_IsPauseEnabled(true);
 				_controls->put_IsStopEnabled(true);
-				_controls->put_IsNextEnabled(false);
-				_controls->put_IsPreviousEnabled(false);
+				_controls->put_IsNextEnabled(true);
+				_controls->put_IsPreviousEnabled(true);
 
 				_handler = new ButtonHandler(this);
 

@@ -99,16 +99,16 @@ namespace Mpris
 			double	minimumRate() const { return 1.0; }
 			double	maximumRate() const { return 1.0; }
 
-			bool	canGoNext() const { return false; }
-			bool	canGoPrevious() const { return false; }
+			bool	canGoNext() const { return true; }
+			bool	canGoPrevious() const { return true; }
 			bool	canPlay() const { return true; }
 			bool	canPause() const { return true; }
 			bool	canSeek() const { return false; }
 			bool	canControl() const { return true; }
 
 		public slots:
-			void	Next() {}
-			void	Previous() {}
+			void	Next();
+			void	Previous();
 			void	Pause();
 			void	PlayPause();
 			void	Stop();
@@ -291,6 +291,16 @@ namespace Mpris
 	QVariantMap	PlayerAdaptor::metadata() const
 	{
 		return _controls->metadata();
+	}
+
+	void	PlayerAdaptor::Next()
+	{
+		emit _controls->nextRequested();
+	}
+
+	void	PlayerAdaptor::Previous()
+	{
+		emit _controls->previousRequested();
 	}
 
 	void	PlayerAdaptor::Pause()

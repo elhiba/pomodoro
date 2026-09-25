@@ -50,6 +50,10 @@ class MediaControls : public QObject
 		void	toggleRequested();
 		void	stopRequested();
 
+		// Next and previous: a song for Spotify and YouTube, a station for the radio list.
+		void	nextRequested();
+		void	previousRequested();
+
 	protected:
 		explicit MediaControls(QObject *parent = nullptr);
 

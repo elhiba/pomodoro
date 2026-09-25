@@ -56,9 +56,22 @@ namespace
 					return MPRemoteCommandHandlerStatusSuccess;
 				}];
 
-				// A live stream: nothing to skip to and nothing to seek in.
-				commands.nextTrackCommand.enabled = NO;
-				commands.previousTrackCommand.enabled = NO;
+				_nextToken = [commands.nextTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *event)
+				{
+					(void)event;
+					relay(&MediaControls::nextRequested);
+					return MPRemoteCommandHandlerStatusSuccess;
+				}];
+
+				_previousToken = [commands.previousTrackCommand addTargetWithHandler:^MPRemoteCommandHandlerStatus(MPRemoteCommandEvent *event)
+				{
+					(void)event;
+					relay(&MediaControls::previousRequested);
+					return MPRemoteCommandHandlerStatusSuccess;
+				}];
+
+				// Next and previous move through a playlist or between stations; seeking
+				// stays with the app's own timeline.
 				commands.changePlaybackPositionCommand.enabled = NO;
 				commands.seekForwardCommand.enabled = NO;
 				commands.seekBackwardCommand.enabled = NO;
@@ -75,6 +88,8 @@ namespace
 				[commands.pauseCommand removeTarget:_pauseToken];
 				[commands.togglePlayPauseCommand removeTarget:_toggleToken];
 				[commands.stopCommand removeTarget:_stopToken];
+				[commands.nextTrackCommand removeTarget:_nextToken];
+				[commands.previousTrackCommand removeTarget:_previousToken];
 
 				[MPNowPlayingInfoCenter defaultCenter].nowPlayingInfo = nil;
 				[MPNowPlayingInfoCenter defaultCenter].playbackState = MPNowPlayingPlaybackStateStopped;
@@ -116,6 +131,8 @@ namespace
 			id	_pauseToken = nil;
 			id	_toggleToken = nil;
 			id	_stopToken = nil;
+			id	_nextToken = nil;
+			id	_previousToken = nil;
 
 			MPMediaItemArtwork	*_artwork = nil;
 
@@ -137,6 +154,8 @@ namespace
 				commands.pauseCommand.enabled = _enabled;
 				commands.togglePlayPauseCommand.enabled = _enabled;
 				commands.stopCommand.enabled = _enabled;
+				commands.nextTrackCommand.enabled = _enabled;
+				commands.previousTrackCommand.enabled = _enabled;
 
 				applyInfo();
 			}
