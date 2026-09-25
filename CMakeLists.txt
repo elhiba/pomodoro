@@ -187,7 +187,7 @@ target_compile_definitions(pomodoro PRIVATE POMODORO_SPOTIFY_CLIENT_ID="${POMODO
 
 # The Discord application that names Pomodoro on people's profiles ("Playing Pomodoro").
 # An Application ID is public by design, like a Client ID. Empty hides the Discord option.
-set(POMODORO_DISCORD_CLIENT_ID "" CACHE STRING "Discord Application ID for Rich Presence")
+set(POMODORO_DISCORD_CLIENT_ID "1553020245256437800" CACHE STRING "Discord Application ID for Rich Presence")
 target_compile_definitions(pomodoro PRIVATE POMODORO_DISCORD_CLIENT_ID="${POMODORO_DISCORD_CLIENT_ID}")
 
 # qmltyperegistrar generates #include "PomodoroTimer.hpp" for the QML_ELEMENT types,

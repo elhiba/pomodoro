@@ -596,6 +596,15 @@ Item
 
 					ToggleSetting
 					{
+						label: "Hide from Alt+Tab while minimised"
+						checked: AppSettings.hideWhenMinimized
+						accentColor: rootPanel.themeColor
+
+						onToggleRequested: (wanted) => AppSettings.hideWhenMinimized = wanted
+					}
+
+					ToggleSetting
+					{
 						label: "Close button hides to the tray"
 						checked: AppSettings.closeMinimizes
 						accentColor: rootPanel.themeColor

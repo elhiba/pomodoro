@@ -685,16 +685,37 @@ Window
 	// the mini timer or the tray returns it to the size it left at.
 	property bool wasMaximized: false
 
+	// Minimised and then hidden, so Alt+Tab and the taskbar skip it until the mini timer
+	// or the tray icon is clicked (the "Hide from Alt+Tab while minimised" setting). Only
+	// when one of those is there to bring it back.
+	property bool minimisedAway: false
+
 	onVisibilityChanged:
 	{
 		if (mainWindow.visibility === Window.Maximized)
 			mainWindow.wasMaximized = true
 		else if (mainWindow.visibility === Window.Windowed)
 			mainWindow.wasMaximized = false
+
+		if (mainWindow.visibility === Window.Minimized && AppSettings.hideWhenMinimized
+			&& (AppSettings.miniTimer || TrayIcon.available))
+		{
+			// After the minimise has finished, not inside it.
+			Qt.callLater(() =>
+			{
+				if (mainWindow.visibility !== Window.Minimized)
+					return
+
+				mainWindow.minimisedAway = true
+				mainWindow.hide()
+			})
+		}
 	}
 
 	function restoreWindow()
 	{
+		mainWindow.minimisedAway = false
+
 		// show() alone leaves a minimised window minimised.
 		if (mainWindow.wasMaximized)
 			mainWindow.showMaximized()
@@ -715,7 +736,8 @@ Window
 		timer: pomodoroTimer
 		themeColor: mainWindow.themeColor
 
-		visible: AppSettings.miniTimer && mainWindow.visibility === Window.Minimized
+		visible: AppSettings.miniTimer
+			&& (mainWindow.visibility === Window.Minimized || mainWindow.minimisedAway)
 
 		onRestoreRequested:
 			mainWindow.restoreWindow()

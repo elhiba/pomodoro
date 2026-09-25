@@ -39,6 +39,7 @@ namespace
 	const char *const	KeyTimerStyle = "appearance/timerStyle";
 	const char *const	KeyFontOnTitle = "appearance/fontOnTitle";
 	const char *const	KeyAppFont = "appearance/font";
+	const char *const	KeyHideWhenMinimized = "window/hideWhenMinimized";
 	const char *const	KeyDiscordShowMusic = "discord/showMusic";
 }
 
@@ -227,6 +228,11 @@ bool	AppSettings::fontOnTitle() const
 bool	AppSettings::discordShowMusic() const
 {
 	return _discordShowMusic;
+}
+
+bool	AppSettings::hideWhenMinimized() const
+{
+	return _hideWhenMinimized;
 }
 
 int	AppSettings::minimumMinutes() const
@@ -601,6 +607,17 @@ void	AppSettings::setDiscordShowMusic(bool value)
 	emit discordShowMusicChanged();
 }
 
+void	AppSettings::setHideWhenMinimized(bool value)
+{
+	if (_hideWhenMinimized == value)
+		return;
+
+	_hideWhenMinimized = value;
+	store(KeyHideWhenMinimized, value);
+
+	emit hideWhenMinimizedChanged();
+}
+
 void	AppSettings::restoreDefaults()
 {
 	setFocusColor(QString());
@@ -609,6 +626,7 @@ void	AppSettings::restoreDefaults()
 	setTimerStyle(QString());
 	setAppFont(QString());
 	setFontOnTitle(DefaultFontOnTitle);
+	setHideWhenMinimized(DefaultHideWhenMinimized);
 
 	setFocusMinutes(DefaultFocusMinutes);
 	setShortBreakMinutes(DefaultShortBreakMinutes);
@@ -718,6 +736,7 @@ void	AppSettings::load()
 	_appFont = _store.value(KeyAppFont, QStringLiteral("")).toString();
 	_fontOnTitle = _store.value(KeyFontOnTitle, DefaultFontOnTitle).toBool();
 	_discordShowMusic = _store.value(KeyDiscordShowMusic, DefaultDiscordShowMusic).toBool();
+	_hideWhenMinimized = _store.value(KeyHideWhenMinimized, DefaultHideWhenMinimized).toBool();
 }
 
 void	AppSettings::store(const char *key, const QVariant &value)

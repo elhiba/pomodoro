@@ -73,6 +73,9 @@ class AppSettings : public QObject
 	// Whether the Discord activity mentions the song playing (DiscordPresence itself
 	// keeps whether the activity is shown at all).
 	Q_PROPERTY(bool discordShowMusic READ discordShowMusic WRITE setDiscordShowMusic NOTIFY discordShowMusicChanged)
+	// Minimising takes the window out of Alt+Tab and the taskbar; the mini timer or the
+	// tray icon brings it back.
+	Q_PROPERTY(bool hideWhenMinimized READ hideWhenMinimized WRITE setHideWhenMinimized NOTIFY hideWhenMinimizedChanged)
 
 	// Handy for the settings panel, so the bounds live in one place instead of
 	// being repeated in QML.
@@ -103,6 +106,7 @@ class AppSettings : public QObject
 		static constexpr bool	DefaultTasksEnabled = true;
 		static constexpr bool	DefaultFontOnTitle = false;
 		static constexpr bool	DefaultDiscordShowMusic = true;
+		static constexpr bool	DefaultHideWhenMinimized = true;
 
 		static constexpr int	MinimumMinutes = 1;
 		static constexpr int	MaximumMinutes = 120;
@@ -151,6 +155,7 @@ class AppSettings : public QObject
 		QString	appFont() const;
 		bool	fontOnTitle() const;
 		bool	discordShowMusic() const;
+		bool	hideWhenMinimized() const;
 
 		int		minimumMinutes() const;
 		int		maximumMinutes() const;
@@ -187,6 +192,7 @@ class AppSettings : public QObject
 		void	setAppFont(const QString &value);
 		void	setFontOnTitle(bool value);
 		void	setDiscordShowMusic(bool value);
+		void	setHideWhenMinimized(bool value);
 
 	public slots:
 		void	restoreDefaults();
@@ -222,6 +228,7 @@ class AppSettings : public QObject
 		void	appFontChanged();
 		void	fontOnTitleChanged();
 		void	discordShowMusicChanged();
+		void	hideWhenMinimizedChanged();
 
 	private:
 		QSettings	_store;
@@ -257,6 +264,7 @@ class AppSettings : public QObject
 		QString	_appFont;
 		bool	_fontOnTitle = DefaultFontOnTitle;
 		bool	_discordShowMusic = DefaultDiscordShowMusic;
+		bool	_hideWhenMinimized = DefaultHideWhenMinimized;
 
 		void	load();
 		void	store(const char *key, const QVariant &value);
