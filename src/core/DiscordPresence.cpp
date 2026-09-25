@@ -8,6 +8,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSettings>
+#include <QTextBoundaryFinder>
 #include <QUuid>
 #include <QtEndian>
 
@@ -21,6 +22,27 @@
 
 namespace
 {
+	// Cuts text to what Discord accepts without breaking a character in half. A plain
+	// left() counts UTF-16 units, so it could split an emoji's surrogate pair, or a
+	// flag or a family emoji built from several code points, and Discord refuses the
+	// whole status for the broken text. Cutting at a grapheme boundary keeps every
+	// character whole. The limit is in UTF-16 units: text that fits in those fits
+	// however Discord counts characters.
+	QString	fitText(const QString &text, int limit)
+	{
+		if (text.size() <= limit)
+			return text;
+
+		QTextBoundaryFinder	finder(QTextBoundaryFinder::Grapheme, text);
+
+		finder.setPosition(limit);
+
+		if (!finder.isAtBoundary())
+			finder.toPreviousBoundary();
+
+		return text.left(qMax(0, finder.position())).trimmed();
+	}
+
 	const char *const	KeyEnabled = "discord/enabled";
 
 	// Discord takes the first free of ten pipes; a second Discord (PTB, Canary) the next.
@@ -127,9 +149,14 @@ QString	DiscordPresence::statusText() const
 		return QStringLiteral("Off");
 
 	if (_ready)
-		return _userName.isEmpty()
+	{
+		QString	connected = _userName.isEmpty()
 			? QStringLiteral("Connected to Discord")
 			: QStringLiteral("Connected as %1").arg(_userName);
+
+		// Connected, but Discord turned the last status down; it says why.
+		return _error.isEmpty() ? connected : connected + QStringLiteral(" · ") + _error;
+	}
 
 	if (!_error.isEmpty())
 		return _error;
@@ -279,6 +306,12 @@ void	DiscordPresence::handle(int opcode, const QJsonObject &message)
 		qInfo("pomodoro: discord: %s", qPrintable(_error));
 		emit stateChanged();
 	}
+	else if (message.value(QStringLiteral("cmd")).toString() == QLatin1String("SET_ACTIVITY") && !_error.isEmpty())
+	{
+		// A status went through, so an earlier refusal no longer applies.
+		_error.clear();
+		emit stateChanged();
+	}
 }
 
 void	DiscordPresence::write(int opcode, const QJsonObject &message)
@@ -297,7 +330,7 @@ QJsonObject	DiscordPresence::activityJson()
 	auto	text = [this](const char *key)
 	{
 		// Discord rejects fields shorter than two characters or longer than 128.
-		QString	value = _wanted.value(QLatin1String(key)).toString().trimmed().left(128);
+		QString	value = fitText(_wanted.value(QLatin1String(key)).toString().trimmed(), 128);
 
 		return value.size() < 2 ? QString() : value;
 	};
@@ -338,7 +371,9 @@ QJsonObject	DiscordPresence::activityJson()
 		name.replace(QStringLiteral("Image"), QStringLiteral("_image"))
 			.replace(QStringLiteral("Text"), QStringLiteral("_text"));
 
-		assets.insert(name.toLower(), value.left(256));
+		// The texts are shown on hover and held to 128 like the others; the images are
+		// keys or links.
+		assets.insert(name.toLower(), fitText(value, name.endsWith(QLatin1String("_text")) ? 128 : 256));
 	}
 
 	if (!assets.isEmpty())

@@ -32,6 +32,16 @@ static QString	instanceLockPath()
 
 int main(int ac, char **av)
 {
+#ifdef Q_OS_WIN
+	// DirectWrite rather than GDI for text, which is Qt's default only from 6.8 on. GDI
+	// has no colour glyphs and a thin fallback, so a Discord name written in emoji or in
+	// fancy Unicode letters (𝓝𝓪𝓶𝓮) came out as black outlines or empty boxes; DirectWrite
+	// draws emoji in colour and finds a font for every character Windows has one for.
+	// Left alone when QT_QPA_PLATFORM is already set, so it can still be overridden.
+	if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
+		qputenv("QT_QPA_PLATFORM", "windows:fontengine=directwrite");
+#endif
+
 	// QApplication rather than QGuiApplication: QSystemTrayIcon and QMenu come from Qt
 	// Widgets, and there is no Qt Quick equivalent for a system tray entry.
 	QApplication	pomodoro(ac, av);
