@@ -85,45 +85,45 @@ Item
 				context.fill()
 			}
 
-			// The wave: at most two soft hills, never a row of ripples. Each is a bell whose
-			// place and height drift a little while the music plays; a short played part
-			// gets one. Added together they make one smooth outline, pinned to the track
-			// at both ends of the played part.
+			// The wave: two see-through waves over the played part, each drawn as its own
+			// layer, as in One UI. They have different lengths and drift at different
+			// speeds, so they slide over and through each other, and where they cross the
+			// overlap shows brighter. Both are pinned to the track at the ends of the
+			// played part.
 			let peak = (top - 1) * rootSlider.amplitude
 			let played = marker - inset
 
 			if (peak > 0.5 && played > 12)
 			{
 				let phase = rootSlider.phase
-				let hills = played < 140
-					? [{ at: 0.5 + 0.06 * Math.sin(phase), height: 0.85 + 0.15 * Math.sin(phase * 1.3), width: 0.24 }]
-					: [{ at: 0.3 + 0.06 * Math.sin(phase), height: 0.8 + 0.2 * Math.sin(phase * 1.3), width: 0.15 },
-						{ at: 0.72 + 0.06 * Math.sin(phase * 0.8 + 1), height: 0.6 + 0.25 * Math.sin(phase * 0.9 + 2), width: 0.13 }]
+				let layers = [
+					{ length: 1.3, speed: 1.0, height: 1.0, offset: 0 },
+					{ length: 0.9, speed: -0.7, height: 0.75, offset: 2.1 }
+				]
 
-				context.fillStyle = Qt.rgba(1, 1, 1, 0.3)
-				context.beginPath()
-				context.moveTo(inset, top + 1)
+				context.fillStyle = Qt.rgba(1, 1, 1, 0.22)
 
-				for (let x = inset; x <= marker; x += 2)
+				for (let layer of layers)
 				{
-					let along = (x - inset) / played
-					let rise = 0
+					context.beginPath()
+					context.moveTo(inset, top + 1)
 
-					for (let hill of hills)
+					for (let x = inset; x <= marker; x += 3)
 					{
-						let distance = (along - hill.at) / hill.width
-						rise += hill.height * Math.exp(-distance * distance)
+						let along = (x - inset) / played
+
+						// About one to two gentle crests over the played part, whatever
+						// its length, rising from the track and settling back into it.
+						let crest = 0.5 + 0.5 * Math.sin(along * Math.PI * 2 * layer.length
+							- phase * layer.speed + layer.offset)
+
+						context.lineTo(x, top + 1 - peak * layer.height * crest * Math.sin(Math.PI * along))
 					}
 
-					// Down to the track at both ends, and never above the tallest hill.
-					rise = Math.min(1, rise) * Math.sin(Math.PI * along)
-
-					context.lineTo(x, top + 1 - peak * rise)
+					context.lineTo(marker, top + 1)
+					context.closePath()
+					context.fill()
 				}
-
-				context.lineTo(marker, top + 1)
-				context.closePath()
-				context.fill()
 			}
 
 			// The thumb: a round knob, a little larger while held.

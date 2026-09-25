@@ -370,6 +370,24 @@ Item
 
 								ScrollBar.vertical: SlimScrollBar {}
 
+								// The wheel over the list scrolls the list and nothing else: left to itself it also
+								// reached the settings page behind it, and both moved.
+								MouseArea
+								{
+									anchors.fill: parent
+									z: 1
+									acceptedButtons: Qt.NoButton
+
+									onWheel: (wheel) =>
+									{
+										let step = wheel.pixelDelta.y !== 0 ? wheel.pixelDelta.y : wheel.angleDelta.y / 120 * 76
+										let bottom = Math.max(0, fontList.contentHeight - fontList.height)
+
+										fontList.contentY = Math.max(0, Math.min(bottom, fontList.contentY - step))
+										wheel.accepted = true
+									}
+								}
+
 								delegate: Rectangle
 								{
 									id: fontRow
