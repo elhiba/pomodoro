@@ -140,9 +140,11 @@ Item
 
 				Item
 				{
-					width: timeText.implicitWidth
+					width: Math.max(timeText.implicitWidth, clock.width)
 					height: timeText.implicitHeight
 
+					// Measures and sizes the clock, and is what the typed-minutes field
+					// copies its font from; the digits on screen are the AnimatedClock.
 					Text
 					{
 						id: timeText
@@ -151,13 +153,25 @@ Item
 
 						text: rootTimer.timer.displayTime
 						color: "white"
-						font.family: timerFont.name
+						opacity: 0
+						font.family: AppSettings.timerFont.length > 0 ? AppSettings.timerFont : timerFont.name
 						// Sized from whichever is the real constraint: the panel's width, or
 						// the width its height would allow at 16:9. Using the width alone
 						// made the digits too tall for a short, wide panel, and the column
 						// below them pushed the start button out through the bottom edge.
 						font.pixelSize: Math.min(glassPanel.width, glassPanel.height / 0.5625) * 0.2
 
+					}
+
+					AnimatedClock
+					{
+						id: clock
+
+						anchors.centerIn: parent
+
+						text: rootTimer.timer.displayTime
+						font: timeText.font
+						style: AppSettings.timerStyle
 						visible: !minutesInput.visible
 					}
 

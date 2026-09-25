@@ -59,6 +59,14 @@ class AppSettings : public QObject
 	// Spotify links the user saved to the music panel's shelf, as a JSON array of
 	// { name, uri, image }, stored like customStations.
 	Q_PROPERTY(QString spotifySaved READ spotifySaved WRITE setSpotifySaved NOTIFY spotifySavedChanged)
+	// Appearance. Colours are "#rrggbb" per session kind, empty for the built-in one;
+	// timerStyle is how the digits change ("" = still, "roll", "flip", "soft"); timerFont
+	// is a font family, empty for the bundled JetBrains Mono.
+	Q_PROPERTY(QString focusColor READ focusColor WRITE setFocusColor NOTIFY focusColorChanged)
+	Q_PROPERTY(QString shortBreakColor READ shortBreakColor WRITE setShortBreakColor NOTIFY shortBreakColorChanged)
+	Q_PROPERTY(QString longBreakColor READ longBreakColor WRITE setLongBreakColor NOTIFY longBreakColorChanged)
+	Q_PROPERTY(QString timerStyle READ timerStyle WRITE setTimerStyle NOTIFY timerStyleChanged)
+	Q_PROPERTY(QString timerFont READ timerFont WRITE setTimerFont NOTIFY timerFontChanged)
 
 	// Handy for the settings panel, so the bounds live in one place instead of
 	// being repeated in QML.
@@ -128,6 +136,11 @@ class AppSettings : public QObject
 		QString	spotifyClientId() const;
 		QString	customStations() const;
 		QString	spotifySaved() const;
+		QString	focusColor() const;
+		QString	shortBreakColor() const;
+		QString	longBreakColor() const;
+		QString	timerStyle() const;
+		QString	timerFont() const;
 
 		int		minimumMinutes() const;
 		int		maximumMinutes() const;
@@ -157,6 +170,11 @@ class AppSettings : public QObject
 		void	setSpotifyClientId(const QString &url);
 		void	setCustomStations(const QString &value);
 		void	setSpotifySaved(const QString &value);
+		void	setFocusColor(const QString &value);
+		void	setShortBreakColor(const QString &value);
+		void	setLongBreakColor(const QString &value);
+		void	setTimerStyle(const QString &value);
+		void	setTimerFont(const QString &value);
 
 	public slots:
 		void	restoreDefaults();
@@ -185,6 +203,11 @@ class AppSettings : public QObject
 		void	spotifyClientIdChanged();
 		void	customStationsChanged();
 		void	spotifySavedChanged();
+		void	focusColorChanged();
+		void	shortBreakColorChanged();
+		void	longBreakColorChanged();
+		void	timerStyleChanged();
+		void	timerFontChanged();
 
 	private:
 		QSettings	_store;
@@ -213,6 +236,11 @@ class AppSettings : public QObject
 		QString	_spotifyClientId;
 		QString	_customStations;
 		QString	_spotifySaved;
+		QString	_focusColor;
+		QString	_shortBreakColor;
+		QString	_longBreakColor;
+		QString	_timerStyle;
+		QString	_timerFont;
 
 		void	load();
 		void	store(const char *key, const QVariant &value);

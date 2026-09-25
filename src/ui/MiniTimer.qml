@@ -19,8 +19,26 @@ Window
 	// Asked to bring the main window back.
 	signal restoreRequested()
 
-	width: 168
-	height: 60
+	// Sized from the digits, so a longer session ("100:00") or a wider font still fits.
+	readonly property int wantedWidth: Math.max(168, Math.ceil(timeLabel.implicitWidth) + 64)
+	readonly property int wantedHeight: 60
+
+	width: rootMini.wantedWidth
+	height: rootMini.wantedHeight
+
+	// Moved to a monitor with a different scale, Windows can keep the window's old size
+	// in pixels while the contents are drawn at the new scale, and the digits spill out
+	// of a card that is suddenly too small. The size is put back once the move settles:
+	// nudged by a pixel first, because asking for the size it already has does nothing.
+	onScreenChanged: Qt.callLater(rootMini.reassertSize)
+
+	function reassertSize()
+	{
+		rootMini.width = rootMini.wantedWidth + 1
+		rootMini.height = rootMini.wantedHeight + 1
+		rootMini.width = Qt.binding(() => rootMini.wantedWidth)
+		rootMini.height = Qt.binding(() => rootMini.wantedHeight)
+	}
 
 	flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.WindowDoesNotAcceptFocus
 
@@ -96,12 +114,14 @@ Window
 
 		Text
 		{
+			id: timeLabel
+
 			anchors.centerIn: parent
 			anchors.horizontalCenterOffset: 8
 
 			text: rootMini.timer.displayTime
 			color: "white"
-			font.family: timerFont.name
+			font.family: AppSettings.timerFont.length > 0 ? AppSettings.timerFont : timerFont.name
 			font.pixelSize: 30
 			font.bold: true
 		}

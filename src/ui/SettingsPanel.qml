@@ -192,6 +192,163 @@ Item
 
 				Text
 				{
+					text: "APPEARANCE"
+					color: Qt.rgba(1, 1, 1, 0.6)
+					font.pixelSize: 11
+					font.bold: true
+					font.letterSpacing: 1.2
+					topPadding: 14
+					bottomPadding: 6
+				}
+
+				// A colour for each kind of session. The first swatch is the built-in one.
+				ColorRow
+				{
+					width: parent.width
+					label: "Focus"
+					value: AppSettings.focusColor
+					defaultColor: "#ba4949"
+
+					onPicked: (colour) => AppSettings.focusColor = colour
+				}
+
+				ColorRow
+				{
+					width: parent.width
+					label: "Short break"
+					value: AppSettings.shortBreakColor
+					defaultColor: "#38858a"
+
+					onPicked: (colour) => AppSettings.shortBreakColor = colour
+				}
+
+				ColorRow
+				{
+					width: parent.width
+					label: "Long break"
+					value: AppSettings.longBreakColor
+					defaultColor: "#397097"
+
+					onPicked: (colour) => AppSettings.longBreakColor = colour
+				}
+
+				Text
+				{
+					text: "Timer animation"
+					color: "white"
+					font.pixelSize: 15
+					topPadding: 12
+					bottomPadding: 6
+				}
+
+				// How the digits change; the timer behind the drawer shows it straight away.
+				Flow
+				{
+					width: parent.width
+					spacing: 6
+
+					Repeater
+					{
+						model: [
+							{ key: "", label: "Still" },
+							{ key: "roll", label: "Rolling" },
+							{ key: "flip", label: "Flip" },
+							{ key: "soft", label: "Soft" }
+						]
+
+						delegate: OptionChip
+						{
+							required property var modelData
+
+							label: modelData.label
+							selected: AppSettings.timerStyle === modelData.key
+
+							onClicked: AppSettings.timerStyle = modelData.key
+						}
+					}
+				}
+
+				Text
+				{
+					text: "Timer font"
+					color: "white"
+					font.pixelSize: 15
+					topPadding: 12
+					bottomPadding: 6
+				}
+
+				// Every font installed on this computer, each shown in itself. Installing a
+				// new font in the system makes it appear here.
+				ComboBox
+				{
+					id: fontBox
+
+					width: parent.width
+					height: 38
+
+					readonly property var families: ["JetBrains Mono (built in)"].concat(Qt.fontFamilies())
+
+					model: fontBox.families
+					currentIndex: AppSettings.timerFont.length > 0
+						? Math.max(0, fontBox.families.indexOf(AppSettings.timerFont))
+						: 0
+
+					onActivated: (index) => AppSettings.timerFont = index === 0 ? "" : fontBox.families[index]
+
+					background: Rectangle
+					{
+						radius: 10
+						color: Qt.rgba(0, 0, 0, 0.2)
+						border.color: fontBox.hovered ? Qt.rgba(1, 1, 1, 0.5) : Qt.rgba(1, 1, 1, 0.2)
+						border.width: 1
+					}
+
+					contentItem: Text
+					{
+						leftPadding: 12
+						rightPadding: 30
+						verticalAlignment: Text.AlignVCenter
+						text: fontBox.displayText
+						color: "white"
+						font.pixelSize: 14
+						font.family: fontBox.currentIndex > 0 ? fontBox.displayText : font.family
+						elide: Text.ElideRight
+					}
+
+					delegate: ItemDelegate
+					{
+						id: fontItem
+
+						required property var modelData
+						required property int index
+
+						width: fontBox.width
+						height: 34
+						highlighted: fontBox.highlightedIndex === fontItem.index
+
+						contentItem: Text
+						{
+							text: fontItem.modelData
+							font.pixelSize: 14
+							font.family: fontItem.index > 0 ? fontItem.modelData : font.family
+							color: "#222222"
+							elide: Text.ElideRight
+							verticalAlignment: Text.AlignVCenter
+						}
+					}
+
+					popup.height: Math.min(360, fontBox.families.length * 34 + 8)
+				}
+
+				Rectangle
+				{
+					width: parent.width
+					height: 1
+					color: Qt.rgba(1, 1, 1, 0.15)
+				}
+
+				Text
+				{
 					text: "AUTOMATION"
 					color: Qt.rgba(1, 1, 1, 0.6)
 					font.pixelSize: 11
@@ -535,6 +692,148 @@ Item
 
 					onClicked:
 						AppSettings.restoreDefaults()
+				}
+			}
+		}
+	}
+
+	// A chip for picking one of a few options.
+	component OptionChip: Button
+	{
+		id: optionChip
+
+		property string label: ""
+		property bool selected: false
+
+		height: 30
+		leftPadding: 14
+		rightPadding: 14
+
+		background: Rectangle
+		{
+			radius: height / 2
+			color: optionChip.selected
+				? Qt.rgba(1, 1, 1, 0.9)
+				: optionChip.hovered ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(1, 1, 1, 0.08)
+		}
+
+		contentItem: Text
+		{
+			text: optionChip.label
+			color: optionChip.selected ? "#333333" : "white"
+			font.pixelSize: 13
+			font.bold: optionChip.selected
+			horizontalAlignment: Text.AlignHCenter
+			verticalAlignment: Text.AlignVCenter
+		}
+	}
+
+	// One session kind's colour: its name, a row of swatches -- the built-in colour
+	// first -- and a box for any colour as #rrggbb. Picking the built-in one stores ""
+	// so a later change of default reaches it.
+	component ColorRow: Column
+	{
+		id: colorRow
+
+		property string label: ""
+		property string value: ""
+		property string defaultColor: "#000000"
+
+		signal picked(string colour)
+
+		readonly property string shown: colorRow.value.length > 0 ? colorRow.value : colorRow.defaultColor
+		readonly property var swatches: [
+			"#ba4949", "#38858a", "#397097", "#7d5ba6", "#c0632f", "#4f7a4a",
+			"#b0476d", "#2f6f8f", "#8a6d3b", "#46505a", "#1f2a44", "#a23b3b"
+		]
+
+		spacing: 6
+		bottomPadding: 10
+
+		Text
+		{
+			text: colorRow.label
+			color: "white"
+			font.pixelSize: 15
+		}
+
+		Flow
+		{
+			width: colorRow.width
+			spacing: 6
+
+			Repeater
+			{
+				// The default first, then the palette without it.
+				model: [colorRow.defaultColor].concat(colorRow.swatches.filter((c) => c !== colorRow.defaultColor))
+
+				delegate: Rectangle
+				{
+					id: swatch
+
+					required property var modelData
+					required property int index
+
+					readonly property bool chosen: colorRow.shown.toLowerCase() === swatch.modelData.toLowerCase()
+
+					width: 26
+					height: 26
+					radius: 13
+					color: swatch.modelData
+
+					border.color: "white"
+					border.width: swatch.chosen ? 3 : swatchHover.hovered ? 1.5 : 0
+
+					HoverHandler
+					{
+						id: swatchHover
+						cursorShape: Qt.PointingHandCursor
+					}
+
+					TapHandler
+					{
+						onTapped: colorRow.picked(swatch.index === 0 ? "" : swatch.modelData)
+					}
+
+					ToolTip.visible: swatchHover.hovered && swatch.index === 0
+					ToolTip.delay: 500
+					ToolTip.text: "Default"
+				}
+			}
+
+			TextField
+			{
+				id: hexField
+
+				width: 86
+				height: 26
+				leftPadding: 8
+				rightPadding: 8
+				topPadding: 0
+				bottomPadding: 0
+
+				placeholderText: "#hex"
+				placeholderTextColor: Qt.rgba(1, 1, 1, 0.4)
+				color: "white"
+				font.pixelSize: 12
+				selectByMouse: true
+				text: colorRow.value
+
+				validator: RegularExpressionValidator { regularExpression: /#?[0-9a-fA-F]{0,6}/ }
+
+				background: Rectangle
+				{
+					radius: 13
+					color: Qt.rgba(0, 0, 0, 0.2)
+					border.color: hexField.activeFocus ? Qt.rgba(1, 1, 1, 0.6) : Qt.rgba(1, 1, 1, 0.2)
+				}
+
+				onAccepted:
+				{
+					let hex = hexField.text.trim().replace("#", "")
+
+					if (hex.length === 6)
+						colorRow.picked("#" + hex.toLowerCase())
 				}
 			}
 		}

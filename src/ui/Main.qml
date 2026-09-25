@@ -47,9 +47,15 @@ Window
 
     property color themeColor:
 	{
-        if (pomodoroTimer.mode === PomodoroTimer.Focus) return "#ba4949"      // Soft Red
-        if (pomodoroTimer.mode === PomodoroTimer.ShortBreak) return "#38858a" // Soft Mint
-        if (pomodoroTimer.mode === PomodoroTimer.LongBreak) return "#397097"  // Soft Blue
+        // The user's own colour for the session kind when one is set in the settings.
+        // Spelt out rather than `colour || default`: compiled ahead of time, that form
+        // handed an empty string to this color property and the window went black.
+        if (pomodoroTimer.mode === PomodoroTimer.Focus)
+            return AppSettings.focusColor.length > 0 ? AppSettings.focusColor : "#ba4949"               // Soft Red
+        if (pomodoroTimer.mode === PomodoroTimer.ShortBreak)
+            return AppSettings.shortBreakColor.length > 0 ? AppSettings.shortBreakColor : "#38858a"     // Soft Mint
+        if (pomodoroTimer.mode === PomodoroTimer.LongBreak)
+            return AppSettings.longBreakColor.length > 0 ? AppSettings.longBreakColor : "#397097"       // Soft Blue
         return "#12130F" 
     }
 

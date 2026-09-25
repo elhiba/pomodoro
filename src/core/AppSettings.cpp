@@ -33,6 +33,11 @@ namespace
 	const char *const	KeySpotifyClientId = "spotify/clientId";
 	const char *const	KeyCustomStations = "music/customStations";
 	const char *const	KeySpotifySaved = "music/spotifySaved";
+	const char *const	KeyFocusColor = "appearance/focusColor";
+	const char *const	KeyShortBreakColor = "appearance/shortBreakColor";
+	const char *const	KeyLongBreakColor = "appearance/longBreakColor";
+	const char *const	KeyTimerStyle = "appearance/timerStyle";
+	const char *const	KeyTimerFont = "appearance/timerFont";
 }
 
 const QStringList	&AppSettings::musicSources()
@@ -185,6 +190,31 @@ QString	AppSettings::customStations() const
 QString	AppSettings::spotifySaved() const
 {
 	return _spotifySaved;
+}
+
+QString	AppSettings::focusColor() const
+{
+	return _focusColor;
+}
+
+QString	AppSettings::shortBreakColor() const
+{
+	return _shortBreakColor;
+}
+
+QString	AppSettings::longBreakColor() const
+{
+	return _longBreakColor;
+}
+
+QString	AppSettings::timerStyle() const
+{
+	return _timerStyle;
+}
+
+QString	AppSettings::timerFont() const
+{
+	return _timerFont;
 }
 
 int	AppSettings::minimumMinutes() const
@@ -482,8 +512,69 @@ void	AppSettings::setSpotifySaved(const QString &value)
 	emit spotifySavedChanged();
 }
 
+void	AppSettings::setFocusColor(const QString &value)
+{
+	if (_focusColor == value)
+		return;
+
+	_focusColor = value;
+	store(KeyFocusColor, value);
+
+	emit focusColorChanged();
+}
+
+void	AppSettings::setShortBreakColor(const QString &value)
+{
+	if (_shortBreakColor == value)
+		return;
+
+	_shortBreakColor = value;
+	store(KeyShortBreakColor, value);
+
+	emit shortBreakColorChanged();
+}
+
+void	AppSettings::setLongBreakColor(const QString &value)
+{
+	if (_longBreakColor == value)
+		return;
+
+	_longBreakColor = value;
+	store(KeyLongBreakColor, value);
+
+	emit longBreakColorChanged();
+}
+
+void	AppSettings::setTimerStyle(const QString &value)
+{
+	if (_timerStyle == value)
+		return;
+
+	_timerStyle = value;
+	store(KeyTimerStyle, value);
+
+	emit timerStyleChanged();
+}
+
+void	AppSettings::setTimerFont(const QString &value)
+{
+	if (_timerFont == value)
+		return;
+
+	_timerFont = value;
+	store(KeyTimerFont, value);
+
+	emit timerFontChanged();
+}
+
 void	AppSettings::restoreDefaults()
 {
+	setFocusColor(QString());
+	setShortBreakColor(QString());
+	setLongBreakColor(QString());
+	setTimerStyle(QString());
+	setTimerFont(QString());
+
 	setFocusMinutes(DefaultFocusMinutes);
 	setShortBreakMinutes(DefaultShortBreakMinutes);
 	setLongBreakMinutes(DefaultLongBreakMinutes);
@@ -585,6 +676,11 @@ void	AppSettings::load()
 		store(KeyMusicSource, _musicSource);
 	}
 	_spotifySaved = _store.value(KeySpotifySaved, QStringLiteral("")).toString();
+	_focusColor = _store.value(KeyFocusColor, QStringLiteral("")).toString();
+	_shortBreakColor = _store.value(KeyShortBreakColor, QStringLiteral("")).toString();
+	_longBreakColor = _store.value(KeyLongBreakColor, QStringLiteral("")).toString();
+	_timerStyle = _store.value(KeyTimerStyle, QStringLiteral("")).toString();
+	_timerFont = _store.value(KeyTimerFont, QStringLiteral("")).toString();
 }
 
 void	AppSettings::store(const char *key, const QVariant &value)
