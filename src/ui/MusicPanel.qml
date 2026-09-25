@@ -924,8 +924,8 @@ Item
 					{
 						width: parent.width
 						text: MusicPlayer.spotify.clientId.length > 0
-							? "Connect your Spotify account to search and play your music here. Spotify Premium is needed."
-							: "Spotify needs a Client ID first."
+							? "Sign in with your Spotify account to search your music and control it from here. It plays in your Spotify app, with Premium."
+							: "Spotify sign-in is not switched on in this copy of Pomodoro yet."
 						color: "white"
 						font.pixelSize: 13
 						wrapMode: Text.WordWrap
@@ -945,13 +945,25 @@ Item
 						horizontalAlignment: Text.AlignHCenter
 					}
 
-					// Only needed when the build carries no Client ID of its own.
+					// A build without a Client ID of its own keeps the developer set-up out of
+					// sight: a listener should never be asked about redirect URIs and ports.
+					// Whoever does have a key of their own opens it here.
+					Chip
+					{
+						anchors.horizontalCenter: parent.horizontalCenter
+						visible: MusicPlayer.spotify.builtInClientId.length === 0 && !rootPanel.spotifyDeveloper
+						label: "I have a Spotify developer key"
+
+						onClicked:
+							rootPanel.spotifyDeveloper = true
+					}
+
 					SearchField
 					{
 						id: clientIdField
 
 						width: parent.width
-						visible: MusicPlayer.spotify.builtInClientId.length === 0
+						visible: MusicPlayer.spotify.builtInClientId.length === 0 && rootPanel.spotifyDeveloper
 						text: AppSettings.spotifyClientId
 						placeholderText: "Spotify Client ID, then Enter"
 						iconSource: "assets/icons/spotify.svg"
@@ -976,8 +988,9 @@ Item
 					PillButton
 					{
 						anchors.horizontalCenter: parent.horizontalCenter
-						label: MusicPlayer.spotify.connecting ? "Waiting for the browser…" : "Connect Spotify"
-						enabled: MusicPlayer.spotify.clientId.length > 0 && !MusicPlayer.spotify.connecting
+						visible: MusicPlayer.spotify.clientId.length > 0
+						label: MusicPlayer.spotify.connecting ? "Waiting for the browser…" : "Sign in with Spotify"
+						enabled: !MusicPlayer.spotify.connecting
 
 						onClicked:
 							MusicPlayer.spotify.connectAccount()
@@ -1132,6 +1145,9 @@ Item
 	}
 
 	// ---------------------------------------------------------------- state and helpers
+
+	// Shows the Client ID field, for a build that carries none.
+	property bool spotifyDeveloper: AppSettings.spotifyClientId.length > 0
 
 	// True while the "add a station" form covers the station list.
 	property bool addingStation: false
