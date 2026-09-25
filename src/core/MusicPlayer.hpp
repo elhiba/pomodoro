@@ -129,6 +129,9 @@ class MusicPlayer : public QObject
 		// Starts one of the Spotify panel's results.
 		Q_INVOKABLE void	playSpotifyResult(int index);
 
+		// Drops the music to a murmur for the given time, so the alarm is heard over it.
+		Q_INVOKABLE void	duck(int milliseconds);
+
 		void	setSource(const QString &source);
 		void	setVolume(qreal volume);
 
@@ -192,6 +195,9 @@ class MusicPlayer : public QObject
 		// dropped request without tearing a healthy stream down.
 		static constexpr int	ProbeFailuresForDrop = 2;
 
+		// How loud the music stays, as a share of its volume, while it is ducked.
+		static constexpr qreal	DuckLevel = 0.15;
+
 		// Recreated on every connection attempt rather than reused. The FFmpeg backend
 		// cannot be talked out of a bad connection by handing it a new URL: it clings to
 		// the buffered remains of the old stream and reports itself happily playing them
@@ -201,6 +207,7 @@ class MusicPlayer : public QObject
 		QAudioOutput	*_output = nullptr;
 		QTimer			_watchdog;
 		QTimer			_retryTimer;
+		QTimer			_duckTimer;
 
 		StreamMetadata	_metadata;
 		MediaControls	*_controls = nullptr;
@@ -226,6 +233,7 @@ class MusicPlayer : public QObject
 
 		QString	_source;
 		qreal	_volume = 0.5;
+		bool	_ducked = false;
 		Status	_status = Idle;
 		QString	_errorText;
 

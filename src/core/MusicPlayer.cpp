@@ -10,8 +10,15 @@ MusicPlayer::MusicPlayer(QObject *parent)
 	_watchdog.setInterval(WatchdogMs);
 
 	_retryTimer.setSingleShot(true);
+	_duckTimer.setSingleShot(true);
 
 	rebuildPlayer();
+
+	connect(&_duckTimer, &QTimer::timeout, this, [this]()
+	{
+		_ducked = false;
+		_output->setVolume(_volume);
+	});
 
 	connect(&_watchdog, &QTimer::timeout, this, &MusicPlayer::onWatchdogTimeout);
 	connect(&_retryTimer, &QTimer::timeout, this, &MusicPlayer::onRetryTimeout);
@@ -336,9 +343,22 @@ void	MusicPlayer::setVolume(qreal volume)
 		return;
 
 	_volume = volume;
-	_output->setVolume(_volume);
+	_output->setVolume(_ducked ? _volume * DuckLevel : _volume);
 
 	emit volumeChanged();
+}
+
+void	MusicPlayer::duck(int milliseconds)
+{
+	// The alarm is a short sample at its own volume, and music at full volume buried it
+	// -- worse at the end of a break, when "focus only" music starts again at the same
+	// moment the alarm sounds. Spotify plays in its own app, whose volume is not ours.
+	if (_kind == Spotify || milliseconds <= 0)
+		return;
+
+	_ducked = true;
+	_output->setVolume(_volume * DuckLevel);
+	_duckTimer.start(milliseconds);
 }
 
 void	MusicPlayer::play()
@@ -746,7 +766,7 @@ void	MusicPlayer::rebuildPlayer()
 		_output->deleteLater();
 
 	_output = new QAudioOutput(this);
-	_output->setVolume(_volume);
+	_output->setVolume(_ducked ? _volume * DuckLevel : _volume);
 
 	_player = new QMediaPlayer(this);
 	_player->setAudioOutput(_output);

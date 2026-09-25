@@ -76,6 +76,9 @@ Window
 
 		onSessionFinished: (finished, next, durationSeconds) =>
 		{
+			// The music steps aside for the length of the alarm (about two seconds) and a
+			// little after, so the alarm is never drowned out.
+			MusicPlayer.duck(3000)
 			SoundPlayer.playAlarm()
 
 			// A finished focus session counts towards whatever task was being worked on,
