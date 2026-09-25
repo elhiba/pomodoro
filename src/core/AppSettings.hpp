@@ -70,6 +70,9 @@ class AppSettings : public QObject
 	Q_PROPERTY(QString timerStyle READ timerStyle WRITE setTimerStyle NOTIFY timerStyleChanged)
 	Q_PROPERTY(QString appFont READ appFont WRITE setAppFont NOTIFY appFontChanged)
 	Q_PROPERTY(bool fontOnTitle READ fontOnTitle WRITE setFontOnTitle NOTIFY fontOnTitleChanged)
+	// Whether the Discord activity mentions the song playing (DiscordPresence itself
+	// keeps whether the activity is shown at all).
+	Q_PROPERTY(bool discordShowMusic READ discordShowMusic WRITE setDiscordShowMusic NOTIFY discordShowMusicChanged)
 
 	// Handy for the settings panel, so the bounds live in one place instead of
 	// being repeated in QML.
@@ -99,6 +102,7 @@ class AppSettings : public QObject
 		static constexpr int	DefaultMiniTimerY = -1;
 		static constexpr bool	DefaultTasksEnabled = true;
 		static constexpr bool	DefaultFontOnTitle = false;
+		static constexpr bool	DefaultDiscordShowMusic = true;
 
 		static constexpr int	MinimumMinutes = 1;
 		static constexpr int	MaximumMinutes = 120;
@@ -146,6 +150,7 @@ class AppSettings : public QObject
 		QString	timerStyle() const;
 		QString	appFont() const;
 		bool	fontOnTitle() const;
+		bool	discordShowMusic() const;
 
 		int		minimumMinutes() const;
 		int		maximumMinutes() const;
@@ -181,6 +186,7 @@ class AppSettings : public QObject
 		void	setTimerStyle(const QString &value);
 		void	setAppFont(const QString &value);
 		void	setFontOnTitle(bool value);
+		void	setDiscordShowMusic(bool value);
 
 	public slots:
 		void	restoreDefaults();
@@ -215,6 +221,7 @@ class AppSettings : public QObject
 		void	timerStyleChanged();
 		void	appFontChanged();
 		void	fontOnTitleChanged();
+		void	discordShowMusicChanged();
 
 	private:
 		QSettings	_store;
@@ -249,6 +256,7 @@ class AppSettings : public QObject
 		QString	_timerStyle;
 		QString	_appFont;
 		bool	_fontOnTitle = DefaultFontOnTitle;
+		bool	_discordShowMusic = DefaultDiscordShowMusic;
 
 		void	load();
 		void	store(const char *key, const QVariant &value);

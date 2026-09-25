@@ -524,6 +524,46 @@ Window
 
 	// Next and previous. On the radio list that is the next station, kept playing if it
 	// was; everywhere else MusicPlayer knows what to do.
+	// What Discord shows on the user's profile while Pomodoro runs, rebuilt whenever the
+	// timer or the music changes. DiscordPresence sends it only when something visible
+	// changed, and turns the seconds left into Discord's own countdown.
+	readonly property string logoUrl: "https://raw.githubusercontent.com/elhiba/pomodoro/main/assets/icons/pomodoroLogoTransport.png"
+
+	readonly property var discordActivity:
+	{
+		let running = pomodoroTimer.state === PomodoroTimer.Running
+		let paused = pomodoroTimer.state === PomodoroTimer.Paused
+		let modeText = pomodoroTimer.mode === PomodoroTimer.Focus ? "Focusing"
+			: pomodoroTimer.mode === PomodoroTimer.ShortBreak ? "On a short break"
+			: "On a long break"
+
+		// Music is only mentioned when the user allows it, and only while it plays.
+		let song = AppSettings.discordShowMusic && MusicPlayer.status === MusicPlayer.Playing
+			&& MusicPlayer.title.length > 0
+		let songLine = song
+			? "♪ " + MusicPlayer.title + (MusicPlayer.stationName.length > 0 ? " · " + MusicPlayer.stationName : "")
+			: ""
+		let cover = song && MusicPlayer.artUrl.startsWith("https://")
+
+		let rounds = pomodoroTimer.roundsBeforeLongBreak
+		let round = pomodoroTimer.completedRounds % rounds + 1
+
+		return {
+			details: running ? modeText : paused ? modeText + " · paused" : "Chilling",
+			state: song ? songLine
+				: running && pomodoroTimer.mode === PomodoroTimer.Focus ? "Round " + round + " of " + rounds
+				: running ? "Recharging" : "Taking it easy",
+			endsIn: running ? pomodoroTimer.remainingSeconds : -1,
+			largeImage: cover ? MusicPlayer.artUrl : mainWindow.logoUrl,
+			largeText: cover ? MusicPlayer.title : "Pomodoro",
+			smallImage: cover ? mainWindow.logoUrl : "",
+			smallText: cover ? "Pomodoro" : ""
+		}
+	}
+
+	onDiscordActivityChanged: DiscordPresence.show(mainWindow.discordActivity)
+	Component.onCompleted: DiscordPresence.show(mainWindow.discordActivity)
+
 	// Next and previous pressed in the desktop's media panel while a station plays.
 	Connections
 	{

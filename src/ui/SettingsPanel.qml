@@ -637,6 +637,116 @@ Item
 					color: Qt.rgba(1, 1, 1, 0.15)
 				}
 
+				// Discord: one switch. Nothing to sign in to -- the Discord app on this computer
+				// is found on its own; the row says whether it was.
+				SectionHeader
+				{
+					id: sectionDiscord
+
+					title: "DISCORD"
+					visible: DiscordPresence.available
+					summary: !DiscordPresence.enabled ? "Off" : DiscordPresence.connected ? "Connected" : "Waiting for Discord"
+				}
+
+				Column
+				{
+					width: parent.width
+					spacing: 4
+					visible: sectionDiscord.visible && sectionDiscord.expanded
+
+					Rectangle
+					{
+						width: parent.width
+						height: 52
+						radius: 12
+						color: Qt.rgba(0, 0, 0, 0.18)
+
+						Image
+						{
+							id: discordLogo
+
+							anchors.left: parent.left
+							anchors.leftMargin: 14
+							anchors.verticalCenter: parent.verticalCenter
+
+							width: 26
+							height: 26
+							source: "assets/icons/discord.svg"
+							sourceSize.width: 52
+							sourceSize.height: 52
+							opacity: DiscordPresence.connected ? 1.0 : 0.5
+						}
+
+						// Green when Discord is showing the activity, grey otherwise.
+						Rectangle
+						{
+							anchors.right: discordLogo.right
+							anchors.bottom: discordLogo.bottom
+							anchors.rightMargin: -4
+							anchors.bottomMargin: -4
+
+							width: 11
+							height: 11
+							radius: 5.5
+							color: DiscordPresence.connected ? "#3ba55d" : "#80848e"
+							border.color: "#2b2d31"
+							border.width: 2
+						}
+
+						Text
+						{
+							anchors.left: discordLogo.right
+							anchors.leftMargin: 14
+							anchors.right: parent.right
+							anchors.rightMargin: 14
+							anchors.verticalCenter: parent.verticalCenter
+
+							text: DiscordPresence.statusText
+							textFormat: Text.PlainText
+							color: DiscordPresence.connected ? "white" : Qt.rgba(1, 1, 1, 0.7)
+							font.pixelSize: 14
+							elide: Text.ElideRight
+						}
+					}
+
+					ToggleSetting
+					{
+						label: "Show my activity on Discord"
+						checked: DiscordPresence.enabled
+						accentColor: rootPanel.themeColor
+
+						onToggleRequested: (wanted) => DiscordPresence.enabled = wanted
+					}
+
+					ToggleSetting
+					{
+						label: "Show the music I'm listening to"
+						checked: AppSettings.discordShowMusic
+						accentColor: rootPanel.themeColor
+						opacity: DiscordPresence.enabled ? 1.0 : 0.5
+
+						onToggleRequested: (wanted) => AppSettings.discordShowMusic = wanted
+					}
+
+					Text
+					{
+						width: parent.width
+						bottomPadding: 8
+						text: "Your profile shows “Playing Pomodoro” with what the timer is doing, while the Discord app is open on this computer."
+						color: Qt.rgba(1, 1, 1, 0.55)
+						font.pixelSize: 12
+						wrapMode: Text.WordWrap
+					}
+				}
+
+				Rectangle
+				{
+					width: parent.width
+					height: 1
+					color: Qt.rgba(1, 1, 1, 0.15)
+					visible: DiscordPresence.available
+				}
+
 				SectionHeader
 				{
 					id: sectionAbout

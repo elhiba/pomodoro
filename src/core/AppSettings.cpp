@@ -39,6 +39,7 @@ namespace
 	const char *const	KeyTimerStyle = "appearance/timerStyle";
 	const char *const	KeyFontOnTitle = "appearance/fontOnTitle";
 	const char *const	KeyAppFont = "appearance/font";
+	const char *const	KeyDiscordShowMusic = "discord/showMusic";
 }
 
 const QStringList	&AppSettings::musicSources()
@@ -221,6 +222,11 @@ QString	AppSettings::appFont() const
 bool	AppSettings::fontOnTitle() const
 {
 	return _fontOnTitle;
+}
+
+bool	AppSettings::discordShowMusic() const
+{
+	return _discordShowMusic;
 }
 
 int	AppSettings::minimumMinutes() const
@@ -584,6 +590,17 @@ void	AppSettings::setFontOnTitle(bool value)
 	emit fontOnTitleChanged();
 }
 
+void	AppSettings::setDiscordShowMusic(bool value)
+{
+	if (_discordShowMusic == value)
+		return;
+
+	_discordShowMusic = value;
+	store(KeyDiscordShowMusic, value);
+
+	emit discordShowMusicChanged();
+}
+
 void	AppSettings::restoreDefaults()
 {
 	setFocusColor(QString());
@@ -700,6 +717,7 @@ void	AppSettings::load()
 	_timerStyle = _store.value(KeyTimerStyle, QStringLiteral("")).toString();
 	_appFont = _store.value(KeyAppFont, QStringLiteral("")).toString();
 	_fontOnTitle = _store.value(KeyFontOnTitle, DefaultFontOnTitle).toBool();
+	_discordShowMusic = _store.value(KeyDiscordShowMusic, DefaultDiscordShowMusic).toBool();
 }
 
 void	AppSettings::store(const char *key, const QVariant &value)

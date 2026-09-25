@@ -97,6 +97,8 @@ qt_add_executable(pomodoro
 	src/core/SpotifyEngine.cpp
 	src/core/AppFont.hpp
 	src/core/AppFont.cpp
+	src/core/DiscordPresence.hpp
+	src/core/DiscordPresence.cpp
 
 	src/core/MediaControls.hpp
 	src/core/MediaControls.cpp
@@ -183,6 +185,11 @@ target_compile_definitions(pomodoro PRIVATE POMODORO_VERSION_STRING="${PROJECT_V
 set(POMODORO_SPOTIFY_CLIENT_ID "" CACHE STRING "Spotify Client ID built into the app (optional)")
 target_compile_definitions(pomodoro PRIVATE POMODORO_SPOTIFY_CLIENT_ID="${POMODORO_SPOTIFY_CLIENT_ID}")
 
+# The Discord application that names Pomodoro on people's profiles ("Playing Pomodoro").
+# An Application ID is public by design, like a Client ID. Empty hides the Discord option.
+set(POMODORO_DISCORD_CLIENT_ID "" CACHE STRING "Discord Application ID for Rich Presence")
+target_compile_definitions(pomodoro PRIVATE POMODORO_DISCORD_CLIENT_ID="${POMODORO_DISCORD_CLIENT_ID}")
+
 # qmltyperegistrar generates #include "PomodoroTimer.hpp" for the QML_ELEMENT types,
 # so src/core has to be on the include path.
 target_include_directories(pomodoro PRIVATE src/core)
@@ -255,6 +262,7 @@ qt_add_qml_module(pomodoro
 		assets/icons/heart.svg
 		assets/icons/heartFilled.svg
 		assets/icons/queueAdd.svg
+		assets/icons/discord.svg
 		assets/icons/skipPrevious.svg
 		assets/icons/playSolid.svg
 		assets/icons/pauseSolid.svg
