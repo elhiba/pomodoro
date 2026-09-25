@@ -1066,12 +1066,16 @@ void	MusicPlayer::updateControls()
 
 	if (title.isEmpty())
 	{
-		// Nothing read yet, or a stream that never says. Fall back through the station
-		// name to the host, so the desktop never shows an empty entry.
-		QString	host = QUrl(_source).host();
+		// Nothing read yet -- between songs while skipping, or a stream that has not said
+		// what it is. "Loading…" over the source's name reads as the short wait it is;
+		// the old fallback was the stream's host, or "Lo-fi stream" for Spotify, which
+		// has none. A station that never names its songs shows its own name.
+		shownTitle = !station.isEmpty() ? station : QStringLiteral("Loading…");
 
-		shownTitle = !station.isEmpty() ? station
-			: (host.isEmpty() ? QStringLiteral("Lo-fi stream") : host);
+		if (_kind == Spotify)
+			shownArtist = QStringLiteral("Spotify");
+		else if (_kind == YouTube)
+			shownArtist = QStringLiteral("YouTube");
 	}
 	else
 		shownArtist = station;

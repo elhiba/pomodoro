@@ -93,13 +93,23 @@ Item
 			let peak = (top - 1) * rootSlider.amplitude
 			let played = marker - inset
 
-			if (peak > 0.5 && played > 12)
+			// Grows in with the song: nothing while the played part is too short to carry
+			// a wave (it would only be a thin triangle), then one wave rising as it gets
+			// room, and the second joining it later.
+			let first = Math.max(0, Math.min(1, (played - 50) / 90))
+			let second = Math.max(0, Math.min(1, (played - 180) / 120))
+
+			if (peak > 0.5 && first > 0)
 			{
 				let phase = rootSlider.phase
 				let layers = [
-					{ length: 1.3, speed: 1.0, height: 1.0, offset: 0 },
-					{ length: 0.9, speed: -0.7, height: 0.75, offset: 2.1 }
-				]
+					{ length: 1.3, speed: 1.0, height: first, offset: 0 },
+					{ length: 0.9, speed: -0.7, height: 0.75 * second, offset: 2.1 }
+				].filter((layer) => layer.height > 0)
+
+				// Fewer crests while the played part is short, so an early wave is one
+				// smooth hump rather than a squeezed row of them.
+				let stretch = Math.min(1, played / 260)
 
 				context.fillStyle = Qt.rgba(1, 1, 1, 0.22)
 
@@ -114,7 +124,7 @@ Item
 
 						// About one to two gentle crests over the played part, whatever
 						// its length, rising from the track and settling back into it.
-						let crest = 0.5 + 0.5 * Math.sin(along * Math.PI * 2 * layer.length
+						let crest = 0.5 + 0.5 * Math.sin(along * Math.PI * 2 * layer.length * stretch
 							- phase * layer.speed + layer.offset)
 
 						context.lineTo(x, top + 1 - peak * layer.height * crest * Math.sin(Math.PI * along))
