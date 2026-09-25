@@ -246,8 +246,23 @@ Item
 					color: MusicPlayer.failed ? "#ff9a9a" : Qt.rgba(1, 1, 1, 0.6)
 					font.pixelSize: 12
 					elide: Text.ElideRight
-					maximumLineCount: 2
+					maximumLineCount: fromLine.visible ? 1 : 2
 					wrapMode: Text.Wrap
+				}
+
+				// Which list the song belongs to, so it is clear what next will play.
+				Text
+				{
+					id: fromLine
+
+					width: parent.width
+					visible: MusicPlayer.playingFrom.length > 0 && !MusicPlayer.failed
+
+					text: "From " + MusicPlayer.playingFrom
+					textFormat: Text.PlainText
+					color: Qt.rgba(1, 1, 1, 0.45)
+					font.pixelSize: 11
+					elide: Text.ElideRight
 				}
 			}
 
@@ -1934,6 +1949,10 @@ Item
 
 		width: transportBtn.primary ? 44 : 34
 		height: transportBtn.width
+
+		// Centred on the row: previous and next are smaller than play, and a Row lines
+		// its items up along the top.
+		anchors.verticalCenter: parent ? parent.verticalCenter : undefined
 
 		opacity: transportBtn.enabled ? 1.0 : 0.3
 

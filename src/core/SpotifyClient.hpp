@@ -4,6 +4,7 @@
 #include <QByteArray>
 #include <QDateTime>
 #include <QElapsedTimer>
+#include <QHash>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QObject>
@@ -92,6 +93,10 @@ class SpotifyClient : public QObject
 	// The cover of what is playing now, for the panel.
 	Q_PROPERTY(QString artUrl READ artUrl NOTIFY nowPlayingChanged)
 
+	// Where the song is playing from: a playlist or album name, "Liked Songs", or
+	// "Search". Empty until known.
+	Q_PROPERTY(QString contextName READ contextName NOTIFY nowPlayingChanged)
+
 	public:
 		explicit SpotifyClient(QObject *parent = nullptr);
 
@@ -116,6 +121,8 @@ class SpotifyClient : public QObject
 		qint64	positionMs() const;
 		qint64	durationMs() const;
 		void	seek(qint64 milliseconds);
+
+		QString	contextName() const;
 
 		QString	openedUri() const;
 		QString	openedTitle() const;
@@ -234,6 +241,11 @@ class SpotifyClient : public QObject
 		qint64			_durationMs = 0;
 		QElapsedTimer	_positionClock;
 
+		// The list playing now, and the names of lists started from the panel, so the
+		// player's bare URI can be shown as the name the user picked it by.
+		QString					_contextUri;
+		QHash<QString, QString>	_contextNames;
+
 		QString			_openedUri;
 		QString			_openedTitle;
 		QVariantList	_resultsBeforeOpening;
@@ -261,6 +273,7 @@ class SpotifyClient : public QObject
 		void	playerQueue(QStringList uris);
 		void	playerPoll();
 		void	fetchContext(const QString &uri, int generation, int attempt);
+		void	setContext(const QString &uri, const QString &reportedName);
 		void	fetchResults(const QString &path, std::function<QVariantList(const QJsonObject &)> parse);
 		void	finishConnecting(const QString &error);
 		void	startWebSignIn();

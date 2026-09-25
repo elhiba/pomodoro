@@ -69,6 +69,10 @@ class MusicPlayer : public QObject
 	// Cover art or thumbnail of what is playing, empty for a radio stream.
 	Q_PROPERTY(QString artUrl READ artUrl NOTIFY nowPlayingChanged)
 
+	// The list it is playing from -- a Spotify playlist, Liked Songs, a YouTube playlist
+	// or search -- for the "From …" line. Empty for radio, whose station is the list.
+	Q_PROPERTY(QString playingFrom READ playingFrom NOTIFY nowPlayingChanged)
+
 	// Whether next/previous mean anything for this source by itself. The radio list skips
 	// between stations in QML, so it is not counted here.
 	Q_PROPERTY(bool canSkip READ canSkip NOTIFY queueChanged)
@@ -137,6 +141,8 @@ class MusicPlayer : public QObject
 
 		// Drops the music to a murmur for the given time, so the alarm is heard over it.
 		Q_INVOKABLE void	duck(int milliseconds);
+
+		QString	playingFrom() const;
 
 		qint64	position() const;
 		qint64	duration() const;
@@ -250,6 +256,7 @@ class MusicPlayer : public QObject
 		// The YouTube queue: video URLs and their thumbnails, and where in it we are.
 		QStringList	_queue;
 		QStringList	_queueImages;
+		QString		_queueFrom;
 		int			_queueIndex = -1;
 		QString		_youtubeThumbnail;
 

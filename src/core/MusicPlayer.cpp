@@ -170,6 +170,11 @@ bool	MusicPlayer::canSkip() const
 
 void	MusicPlayer::playYouTubeQueue(const QVariantList &items, int index)
 {
+	// A playlist's listing carries its title; a search has none.
+	_queueFrom = _ytDlp->resultsTitle().isEmpty()
+		? QStringLiteral("YouTube search")
+		: _ytDlp->resultsTitle();
+
 	QStringList	urls;
 	QStringList	images;
 	int			start = 0;
@@ -369,6 +374,19 @@ void	MusicPlayer::setVolume(qreal volume)
 		_spotify->setPlayerVolume(_ducked ? _volume * DuckLevel : _volume);
 
 	emit volumeChanged();
+}
+
+QString	MusicPlayer::playingFrom() const
+{
+	switch (_kind)
+	{
+		case Spotify:
+			return _spotify->contextName();
+		case YouTube:
+			return _queue.isEmpty() ? QString() : _queueFrom;
+		default:
+			return QString();
+	}
 }
 
 qint64	MusicPlayer::position() const

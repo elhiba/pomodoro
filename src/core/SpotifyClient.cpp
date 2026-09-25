@@ -301,6 +301,62 @@ void	SpotifyClient::seek(qint64 milliseconds)
 		[this](int, const QJsonObject &, const QString &) { QTimer::singleShot(400, this, &SpotifyClient::poll); });
 }
 
+QString	SpotifyClient::contextName() const
+{
+	return _contextNames.value(_contextUri);
+}
+
+// Names the list playing now. Spotify's own name when the player gives one (it often
+// does not), else the name it was picked by in the panel; Liked Songs and a song started
+// from search have fixed names; anything else -- a playlist started from the phone, or
+// before this run -- is looked up once through the public oEmbed endpoint.
+void	SpotifyClient::setContext(const QString &uri, const QString &reportedName)
+{
+	if (!reportedName.isEmpty())
+		_contextNames.insert(uri, reportedName);
+	else if (uri.endsWith(QLatin1String(":collection")))
+		_contextNames.insert(uri, QStringLiteral("Liked Songs"));
+	else if (uri.startsWith(QLatin1String("spotify:track:")) || uri.startsWith(QLatin1String("spotify:episode:")))
+		_contextNames.insert(uri, QStringLiteral("Search"));
+
+	if (uri == _contextUri)
+		return;
+
+	_contextUri = uri;
+
+	emit nowPlayingChanged();
+
+	QStringList	parts = uri.split(QLatin1Char(':'));
+
+	if (uri.isEmpty() || _contextNames.contains(uri) || parts.size() != 3)
+		return;
+
+	QUrl		oembed(QStringLiteral("https://open.spotify.com/oembed"));
+	QUrlQuery	query;
+
+	query.addQueryItem(QStringLiteral("url"),
+		QStringLiteral("https://open.spotify.com/%1/%2").arg(parts.at(1), parts.at(2)));
+	oembed.setQuery(query);
+
+	QNetworkReply	*reply = _network.get(QNetworkRequest(oembed));
+
+	connect(reply, &QNetworkReply::finished, this, [this, reply, uri]()
+	{
+		reply->deleteLater();
+
+		QString	title = QJsonDocument::fromJson(reply->readAll()).object()
+			.value(QStringLiteral("title")).toString().trimmed();
+
+		if (title.isEmpty())
+			return;
+
+		_contextNames.insert(uri, title);
+
+		if (uri == _contextUri)
+			emit nowPlayingChanged();
+	});
+}
+
 QString	SpotifyClient::openedUri() const
 {
 	return _openedUri;
@@ -326,6 +382,7 @@ void	SpotifyClient::openContext(const QString &uri, const QString &title)
 
 	_openedUri = uri;
 	_openedTitle = title;
+	_contextNames.insert(uri, title);
 	_results.clear();
 	_resultsError.clear();
 	_searching = true;
@@ -579,7 +636,10 @@ void	SpotifyClient::playResult(int index)
 		playerCommand(QStringLiteral("/player/play"), QJsonObject{ { QStringLiteral("uri"), uri } }, true);
 
 		if (chosen.value(QStringLiteral("kind")).toString() != QLatin1String("track"))
+		{
+			_contextNames.insert(uri, chosen.value(QStringLiteral("title")).toString());
 			return;
+		}
 
 		QStringList	following;
 
@@ -1280,6 +1340,9 @@ void	SpotifyClient::poll()
 				_durationMs = item.value(QStringLiteral("duration_ms")).toInteger();
 				_positionClock.restart();
 
+				setContext(body.value(QStringLiteral("context")).toObject().value(QStringLiteral("uri")).toString(),
+					QString());
+
 				QJsonArray	images = item.value(QStringLiteral("album")).toObject().value(QStringLiteral("images")).toArray();
 
 				if (images.isEmpty())
@@ -1456,6 +1519,9 @@ void	SpotifyClient::playerPoll()
 		_positionMs = track.value(QStringLiteral("position")).toInteger();
 		_durationMs = track.value(QStringLiteral("duration")).toInteger();
 		_positionClock.restart();
+
+		setContext(body.value(QStringLiteral("context_uri")).toString(),
+			body.value(QStringLiteral("context_name")).toString());
 
 		if (title == _track && artist == _artist && playing == _isPlaying && art == _artUrl)
 			return;
