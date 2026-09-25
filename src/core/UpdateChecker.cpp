@@ -1,7 +1,6 @@
 #include "UpdateChecker.hpp"
 
 #include <QCoreApplication>
-#include <QDesktopServices>
 #include <QDir>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -11,18 +10,20 @@
 #include <QProcess>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTemporaryFile>
 #include <QTimer>
 #include <QUrl>
+
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
 
 const char *const	UpdateChecker::LatestReleaseUrl =
 	"https://api.github.com/repos/elhiba/pomodoro/releases/latest";
 
-const char *const	UpdateChecker::ReleasesPageUrl =
-	"https://github.com/elhiba/pomodoro/releases/latest";
-
 namespace
 {
-	// Where a Windows installer is saved before it runs. Emptied at start-up, since the
+	// Where an update is saved before it is installed. Emptied at start-up, since the
 	// last one has done its job by the time the app it installed is running.
 	QString	updateTempDirectory()
 	{
@@ -42,6 +43,86 @@ namespace
 
 	// Set by detectInstallKind() when the install found was the all-users one.
 	bool	installedForAllUsers = false;
+
+	// Unpacks the portable zip over the folder the app runs from, once the app has
+	// exited, and starts it again. robocopy rather than Copy-Item: it merges into the
+	// existing folders instead of nesting them, and retries a file Windows still holds
+	// open for a moment after the process that used it has gone.
+	const char *const	PortableUpdateScript = R"ps(
+param([int]$ProcessId, [string]$Zip, [string]$Target, [int]$Relaunch)
+
+Wait-Process -Id $ProcessId -Timeout 60 -ErrorAction SilentlyContinue
+
+$staging = Join-Path (Split-Path -Parent $Zip) 'unpacked'
+
+if (Test-Path -LiteralPath $staging) { Remove-Item -LiteralPath $staging -Recurse -Force }
+
+try {
+	Expand-Archive -LiteralPath $Zip -DestinationPath $staging -Force -ErrorAction Stop
+
+	# The release zip holds a pomodoro\ folder; accept one packed without it too.
+	$source = $staging
+	$inner = Join-Path $staging 'pomodoro'
+	if (Test-Path -LiteralPath (Join-Path $inner 'pomodoro.exe')) { $source = $inner }
+
+	robocopy $source $Target /E /R:30 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+} catch {}
+
+if ($Relaunch -eq 1) {
+	Start-Process -FilePath (Join-Path $Target 'pomodoro.exe') -WorkingDirectory $Target
+}
+)ps";
+
+	// Whether this process can write into a folder. QFileInfo::isWritable() does not look
+	// at NTFS permissions, so the only honest answer is to try.
+	bool	canWriteInto(const QString &directory)
+	{
+		QTemporaryFile	probe(directory + QStringLiteral("/.pomodoro-write-test-XXXXXX"));
+
+		return probe.open();
+	}
+#endif
+
+#ifdef Q_OS_MACOS
+	// Swaps the .app bundle for the one on the new disk image once the app has exited,
+	// putting the old one back if the copy fails, and starts it again. $1 is the pid to
+	// wait for, $2 the dmg, $3 the bundle to replace, $4 whether to relaunch.
+	const char *const	MacUpdateScript = R"sh(
+pid="$1"; dmg="$2"; app="$3"; relaunch="$4"
+
+while kill -0 "$pid" 2>/dev/null; do sleep 0.2; done
+
+mnt=$(mktemp -d "${TMPDIR:-/tmp}/pomodoro-update.XXXXXX") || exit 1
+
+if hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$mnt" "$dmg" >/dev/null; then
+	new=$(find "$mnt" -maxdepth 1 -name '*.app' 2>/dev/null | head -n 1)
+
+	if [ -n "$new" ] && rm -rf "$app.old" && mv "$app" "$app.old"; then
+		if ditto "$new" "$app"; then
+			rm -rf "$app.old"
+		else
+			rm -rf "$app"
+			mv "$app.old" "$app"
+		fi
+	fi
+
+	hdiutil detach "$mnt" -quiet
+fi
+
+rmdir "$mnt" 2>/dev/null
+rm -f "$dmg"
+xattr -dr com.apple.quarantine "$app" 2>/dev/null
+
+if [ "$relaunch" = 1 ]; then open "$app"; fi
+)sh";
+
+	// The .app bundle this copy runs from, or nothing when it is not in one.
+	QString	macBundlePath()
+	{
+		QString	bundle = QDir(QCoreApplication::applicationDirPath() + QStringLiteral("/../..")).canonicalPath();
+
+		return bundle.endsWith(QLatin1String(".app")) ? bundle : QString();
+	}
 #endif
 }
 
@@ -50,6 +131,8 @@ UpdateChecker::UpdateChecker(QObject *parent)
 	_installKind(detectInstallKind())
 {
 	QDir(updateTempDirectory()).removeRecursively();
+
+	connect(qApp, &QCoreApplication::aboutToQuit, this, &UpdateChecker::onAboutToQuit);
 }
 
 UpdateChecker::~UpdateChecker()
@@ -76,23 +159,22 @@ QString	UpdateChecker::statusText() const
 		case UpToDate:
 			return QStringLiteral("Up to date (%1)").arg(currentVersion());
 		case UpdateAvailable:
+			if (_installKind == NotInstallable)
+				return QStringLiteral("Version %1 is available (you have %2). This build cannot replace itself; "
+					"update it the way you installed it")
+					.arg(_latestVersion, currentVersion());
+
 			return QStringLiteral("Version %1 is available (you have %2)")
 				.arg(_latestVersion, currentVersion());
 		case Downloading:
 			return QStringLiteral("Downloading version %1… %2%")
 				.arg(_latestVersion)
 				.arg(qRound(_downloadProgress * 100));
+		case ReadyToInstall:
+			return QStringLiteral("Version %1 is ready and installs as soon as the timer is stopped")
+				.arg(_latestVersion);
 		case Installing:
-			switch (_installKind)
-			{
-				case MacDiskImage:
-					return QStringLiteral("Drag Pomodoro to Applications to replace this copy, then open it again");
-				case LinuxAppImage:
-					return QStringLiteral("Restarting into version %1…").arg(_latestVersion);
-				case WindowsInstaller:
-				default:
-					return QStringLiteral("Installing version %1…").arg(_latestVersion);
-			}
+			return QStringLiteral("Restarting into version %1…").arg(_latestVersion);
 		case Failed:
 			return _errorText.isEmpty()
 				? QStringLiteral("Could not check for updates")
@@ -121,6 +203,11 @@ bool	UpdateChecker::canInstall() const
 	return _installKind != NotInstallable && !_assetUrl.isEmpty() && !_assetSha256.isEmpty();
 }
 
+bool	UpdateChecker::readyToInstall() const
+{
+	return _status == ReadyToInstall;
+}
+
 qreal	UpdateChecker::downloadProgress() const
 {
 	return _downloadProgress;
@@ -138,7 +225,8 @@ QString	UpdateChecker::currentVersion() const
 
 void	UpdateChecker::check()
 {
-	if (_reply || _download || _status == Installing)
+	// Once an update is downloaded there is nothing newer worth asking about until it is in.
+	if (_reply || _download || _status == ReadyToInstall || _status == Installing)
 		return;
 
 	QNetworkRequest	request((QUrl(QLatin1String(LatestReleaseUrl))));
@@ -166,14 +254,9 @@ void	UpdateChecker::check()
 
 void	UpdateChecker::installUpdate()
 {
-	if (_download || _status == Installing || !updateAvailable())
+	if (_download || _status == ReadyToInstall || _status == Installing
+		|| !updateAvailable() || !canInstall())
 		return;
-
-	if (!canInstall())
-	{
-		openDownloadPage();
-		return;
-	}
 
 	QString	path = downloadPath();
 
@@ -210,11 +293,24 @@ void	UpdateChecker::installUpdate()
 	connect(_download, &QNetworkReply::finished, this, &UpdateChecker::onDownloadFinished);
 }
 
-void	UpdateChecker::openDownloadPage()
+void	UpdateChecker::applyUpdate()
 {
-	QString	url = _releaseUrl.isEmpty() ? QLatin1String(ReleasesPageUrl) : _releaseUrl;
+	if (_status != ReadyToInstall || !launch(_downloadedPath, true))
+		return;
 
-	QDesktopServices::openUrl(QUrl(url));
+	setStatus(Installing);
+	emit quitting();
+
+	// A moment for the status line to be seen before the window goes.
+	QTimer::singleShot(600, qApp, &QCoreApplication::quit);
+}
+
+// Quitting with a verified update waiting puts it in place on the way out, without
+// starting the app again: the user asked for it to close.
+void	UpdateChecker::onAboutToQuit()
+{
+	if (_status == ReadyToInstall)
+		launch(_downloadedPath, false);
 }
 
 void	UpdateChecker::onCheckFinished()
@@ -269,11 +365,14 @@ void	UpdateChecker::onCheckFinished()
 	}
 
 	_latestVersion = normalise(tag);
-	_releaseUrl = object.value(QStringLiteral("html_url")).toString();
 
 	pickAsset(object.value(QStringLiteral("assets")).toArray());
 
 	setStatus(updateAvailable() ? UpdateAvailable : UpToDate);
+
+	// No button to press: a newer release this copy can install is fetched right away.
+	if (updateAvailable() && canInstall())
+		installUpdate();
 }
 
 void	UpdateChecker::onDownloadReadyRead()
@@ -332,7 +431,11 @@ void	UpdateChecker::onDownloadFinished()
 	}
 
 	setDownloadProgress(1.0);
-	launch(_downloadFile.fileName());
+
+	_downloadedPath = _downloadFile.fileName();
+
+	// Main.qml installs it the moment the timer is idle, or it goes in when the app quits.
+	setStatus(ReadyToInstall);
 }
 
 void	UpdateChecker::setStatus(Status status, const QString &errorText)
@@ -394,6 +497,9 @@ void	UpdateChecker::pickAsset(const QJsonArray &assets)
 		case WindowsInstaller:
 			suffix = QStringLiteral("-windows-x64-setup.exe");
 			break;
+		case WindowsPortable:
+			suffix = QStringLiteral("-windows-x64.zip");
+			break;
 		case LinuxAppImage:
 			suffix = QStringLiteral("-x86_64.AppImage");
 			break;
@@ -413,8 +519,7 @@ void	UpdateChecker::pickAsset(const QJsonArray &assets)
 		if (!name.endsWith(suffix, Qt::CaseInsensitive))
 			continue;
 
-		// "sha256:<hex>". An asset without one cannot be verified, and is left for the
-		// browser rather than run.
+		// "sha256:<hex>". An asset without one cannot be verified, and is not installed.
 		QString	digest = asset.value(QStringLiteral("digest")).toString();
 
 		if (!digest.startsWith(QLatin1String("sha256:")))
@@ -440,19 +545,12 @@ QString	UpdateChecker::downloadPath() const
 			return current.absolutePath() + QStringLiteral("/.") + _assetName + QStringLiteral(".part");
 	}
 
-	// A dmg is something the user handles, so it goes where they will find it again.
-	if (_installKind == MacDiskImage)
-	{
-		QString	downloads = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
-
-		if (!downloads.isEmpty())
-			return downloads + QLatin1Char('/') + _assetName;
-	}
-
 	return updateTempDirectory() + QLatin1Char('/') + _assetName;
 }
 
-void	UpdateChecker::launch(const QString &path)
+// Puts the verified download in place. With relaunch the new version is started once this
+// process has gone; without it (the app is quitting) it is simply there next time.
+bool	UpdateChecker::launch(const QString &path, bool relaunch)
 {
 	switch (_installKind)
 	{
@@ -465,9 +563,11 @@ void	UpdateChecker::launch(const QString &path)
 				QStringLiteral("/SILENT"),
 				QStringLiteral("/SUPPRESSMSGBOXES"),
 				QStringLiteral("/NORESTART"),
-				QStringLiteral("/CLOSEAPPLICATIONS"),
-				QStringLiteral("/RELAUNCH=1")
+				QStringLiteral("/CLOSEAPPLICATIONS")
 			};
+
+			if (relaunch)
+				arguments.append(QStringLiteral("/RELAUNCH=1"));
 
 			// Updating an install in Program Files has to go back there, which takes
 			// administrator rights: Windows asks once, as it did the first time.
@@ -479,10 +579,58 @@ void	UpdateChecker::launch(const QString &path)
 			if (!QProcess::startDetached(path, arguments))
 			{
 				setStatus(Failed, QStringLiteral("Could not start the installer"));
-				return;
+				return false;
 			}
 
-			break;
+			return true;
+		}
+
+		case WindowsPortable:
+		{
+#ifdef Q_OS_WIN
+			QString	scriptPath = updateTempDirectory() + QStringLiteral("/apply-update.ps1");
+			QFile	script(scriptPath);
+
+			if (!script.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)
+				|| script.write(PortableUpdateScript) < 0)
+			{
+				setStatus(Failed, QStringLiteral("Could not prepare the update: %1").arg(script.errorString()));
+				return false;
+			}
+
+			script.close();
+
+			QProcess	process;
+
+			process.setProgram(QStringLiteral("powershell.exe"));
+			process.setArguments({
+				QStringLiteral("-NoProfile"),
+				QStringLiteral("-NonInteractive"),
+				QStringLiteral("-ExecutionPolicy"), QStringLiteral("Bypass"),
+				QStringLiteral("-WindowStyle"), QStringLiteral("Hidden"),
+				QStringLiteral("-File"), QDir::toNativeSeparators(scriptPath),
+				QStringLiteral("-ProcessId"), QString::number(QCoreApplication::applicationPid()),
+				QStringLiteral("-Zip"), QDir::toNativeSeparators(path),
+				QStringLiteral("-Target"), QDir::toNativeSeparators(QCoreApplication::applicationDirPath()),
+				QStringLiteral("-Relaunch"), relaunch ? QStringLiteral("1") : QStringLiteral("0")
+			});
+
+			// No console window flashing up while it works.
+			process.setCreateProcessArgumentsModifier([](QProcess::CreateProcessArguments *arguments)
+			{
+				arguments->flags |= CREATE_NO_WINDOW;
+			});
+
+			if (!process.startDetached())
+			{
+				setStatus(Failed, QStringLiteral("Could not start the updater"));
+				return false;
+			}
+
+			return true;
+#else
+			return false;
+#endif
 		}
 
 		case LinuxAppImage:
@@ -505,7 +653,7 @@ void	UpdateChecker::launch(const QString &path)
 				if (!QFile::copy(path, staged))
 				{
 					setStatus(Failed, QStringLiteral("Could not write next to %1").arg(target));
-					return;
+					return false;
 				}
 
 				QFile::remove(path);
@@ -518,35 +666,47 @@ void	UpdateChecker::launch(const QString &path)
 			if (!QFile::rename(staged, target))
 			{
 				setStatus(Failed, QStringLiteral("Could not replace %1").arg(target));
-				return;
+				return false;
 			}
 
 			// Started a moment after this process has gone, so the new copy does not find
 			// the single-instance lock still held and simply hand over to the old one.
-			QProcess::startDetached(QStringLiteral("/bin/sh"),
-				{ QStringLiteral("-c"), QStringLiteral("sleep 1; exec \"$0\""), target });
+			if (relaunch)
+				QProcess::startDetached(QStringLiteral("/bin/sh"),
+					{ QStringLiteral("-c"), QStringLiteral("sleep 1; exec \"$0\""), target });
 
-			break;
+			return true;
 		}
 
 		case MacDiskImage:
-			QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+		{
+#ifdef Q_OS_MACOS
+			// $0 names the script; the rest are its arguments.
+			bool	started = QProcess::startDetached(QStringLiteral("/bin/sh"), {
+				QStringLiteral("-c"), QLatin1String(MacUpdateScript),
+				QStringLiteral("pomodoro-update"),
+				QString::number(QCoreApplication::applicationPid()),
+				path,
+				macBundlePath(),
+				relaunch ? QStringLiteral("1") : QStringLiteral("0")
+			});
 
-			// Nothing more to do in here: Finder takes it from the disk image.
-			setStatus(Installing);
-			return;
+			if (!started)
+			{
+				setStatus(Failed, QStringLiteral("Could not start the updater"));
+				return false;
+			}
+
+			return true;
+#else
+			return false;
+#endif
+		}
 
 		case NotInstallable:
 		default:
-			openDownloadPage();
-			return;
+			return false;
 	}
-
-	setStatus(Installing);
-	emit quitting();
-
-	// A moment for the status line to be seen before the window goes.
-	QTimer::singleShot(600, qApp, &QCoreApplication::quit);
 }
 
 UpdateChecker::InstallKind	UpdateChecker::detectInstallKind()
@@ -571,8 +731,24 @@ UpdateChecker::InstallKind	UpdateChecker::detectInstallKind()
 		}
 	}
 
-	return NotInstallable;
+	// Not the installed copy, so the unzipped portable folder -- unless it is a build
+	// tree, which is a developer's to manage and not something to unzip a release over.
+	if (QFileInfo::exists(running + QStringLiteral("/CMakeCache.txt")))
+		return NotInstallable;
+
+	return canWriteInto(running) ? WindowsPortable : NotInstallable;
 #elif defined(Q_OS_MACOS)
+	QString	bundle = macBundlePath();
+
+	if (bundle.isEmpty())
+		return NotInstallable;
+
+	QString	parent = QFileInfo(bundle).absolutePath();
+
+	// Run straight off the disk image, or out of a build tree: nothing to replace.
+	if (!QFileInfo(parent).isWritable() || QFileInfo::exists(parent + QStringLiteral("/CMakeCache.txt")))
+		return NotInstallable;
+
 	return MacDiskImage;
 #else
 	// Set by the AppImage runtime to the file that was launched.

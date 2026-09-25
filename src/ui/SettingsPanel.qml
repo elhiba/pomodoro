@@ -823,9 +823,9 @@ Item
 						wrapMode: Text.WordWrap
 					}
 
-					// One button with two jobs: it looks for a newer release, and once it has
-					// found one it becomes the way to install it -- in place where this copy
-					// knows how to replace itself, through the release page where it does not.
+					// Looks for a newer release. Updates download and install by themselves;
+					// once one is downloaded this restarts into it without waiting for the
+					// timer to be stopped.
 					Button
 					{
 						id: updateBtn
@@ -862,12 +862,13 @@ Item
 								if (UpdateChecker.status === UpdateChecker.Downloading)
 									return "Downloading… " + Math.round(UpdateChecker.downloadProgress * 100) + "%"
 
-								if (!UpdateChecker.updateAvailable)
-									return "Check for updates"
+								if (UpdateChecker.readyToInstall)
+									return "Restart into " + UpdateChecker.latestVersion
 
-								return UpdateChecker.canInstall
-									? "Update to " + UpdateChecker.latestVersion
-									: "Get version " + UpdateChecker.latestVersion
+								if (UpdateChecker.updateAvailable && UpdateChecker.canInstall)
+									return "Update to " + UpdateChecker.latestVersion
+
+								return "Check for updates"
 							}
 
 							color: "white"
@@ -881,7 +882,9 @@ Item
 						{
 							SoundPlayer.playClick()
 
-							if (UpdateChecker.updateAvailable)
+							if (UpdateChecker.readyToInstall)
+								UpdateChecker.applyUpdate()
+							else if (UpdateChecker.updateAvailable && UpdateChecker.canInstall)
 								UpdateChecker.installUpdate()
 							else
 								UpdateChecker.check()

@@ -897,8 +897,10 @@ Window
 		}
 	}
 
-	// Every launch asks GitHub once whether there is something newer, a few seconds in so
-	// it never competes with the window coming up. Nothing is shown unless there is.
+	// Every launch asks GitHub whether there is something newer, a few seconds in so it
+	// never competes with the window coming up, and asks again every six hours for a copy
+	// that lives in the tray for days. A newer release downloads itself; nothing is shown
+	// unless there is one.
 	Timer
 	{
 		interval: 4000
@@ -908,8 +910,43 @@ Window
 			UpdateChecker.check()
 	}
 
-	// The offer to update, along the bottom of the home screen. "Later" puts it away for
-	// this run only; the next launch asks again.
+	Timer
+	{
+		interval: 6 * 60 * 60 * 1000
+		running: true
+		repeat: true
+
+		onTriggered:
+			UpdateChecker.check()
+	}
+
+	// A downloaded update goes in by itself as soon as the timer is idle, so a running or
+	// paused session is never cut short. The pause gives a finished session's alarm time
+	// to play, and lets an automatically started next session claim the timer first.
+	readonly property bool updateCanApply: UpdateChecker.readyToInstall
+		&& pomodoroTimer.state === PomodoroTimer.Idle
+
+	onUpdateCanApplyChanged:
+	{
+		if (updateCanApply)
+			updateApplyDelay.restart()
+	}
+
+	Timer
+	{
+		id: updateApplyDelay
+
+		interval: 5000
+
+		onTriggered:
+		{
+			if (mainWindow.updateCanApply)
+				UpdateChecker.applyUpdate()
+		}
+	}
+
+	// What the updater is doing, along the bottom of the home screen. "Later" puts it
+	// away for this run only; the update itself still goes ahead.
 	Rectangle
 	{
 		id: updateBanner
@@ -950,9 +987,9 @@ Window
 
 				// While downloading or installing, the status line is the news; before
 				// that, just what is on offer.
-				text: UpdateChecker.busy || UpdateChecker.status === UpdateChecker.Failed
-					? UpdateChecker.statusText
-					: "Pomodoro " + UpdateChecker.latestVersion + " is available"
+				text: UpdateChecker.status === UpdateChecker.UpdateAvailable && UpdateChecker.canInstall
+					? "Pomodoro " + UpdateChecker.latestVersion + " is available"
+					: UpdateChecker.statusText
 
 				color: UpdateChecker.status === UpdateChecker.Failed ? "#ffb4b4" : "white"
 				font.pixelSize: 14
@@ -960,16 +997,21 @@ Window
 				width: Math.min(implicitWidth, mainWindow.width - 300)
 			}
 
+			// Only for when waiting is not wanted, or something went wrong: the update
+			// downloads and installs without it.
 			BannerButton
 			{
-				visible: !UpdateChecker.busy
+				visible: !UpdateChecker.busy && UpdateChecker.canInstall
 				primary: true
-				label: UpdateChecker.status === UpdateChecker.Failed
-					? "Try again"
-					: UpdateChecker.canInstall ? "Update now" : "Download"
+				label: UpdateChecker.status === UpdateChecker.Failed ? "Try again" : "Restart now"
 
 				onClicked:
-					UpdateChecker.installUpdate()
+				{
+					if (UpdateChecker.readyToInstall)
+						UpdateChecker.applyUpdate()
+					else
+						UpdateChecker.installUpdate()
+				}
 			}
 
 			BannerButton

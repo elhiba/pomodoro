@@ -62,11 +62,15 @@ with its icon, by typing its name. On Linux the AppImage writes a desktop entry 
 `~/.local/share/applications` the first time it runs, so it is searchable without being
 unpacked anywhere; delete that file to remove it.
 
-**Updates** are checked every time the app starts. When a newer release exists a banner
-offers it; **Update now** downloads it, checks it against the SHA-256 checksum GitHub
-publishes for it, and installs it — the Windows installer runs silently and reopens the
-app, the AppImage replaces itself, and on macOS the new disk image opens for you to drag
-across. The portable zip and builds from source are sent to the release page instead.
+**Updates** install themselves. The app checks for a new release when it starts and
+every six hours after that; when one exists it downloads it in the background, checks it
+against the SHA-256 checksum GitHub publishes for it, and installs it as soon as the timer
+is stopped — a running or paused session is never interrupted — then reopens. Quitting
+with an update waiting installs it on the way out. Every download works this way: the
+Windows installer runs silently, the portable zip unpacks over its own folder, the
+AppImage replaces itself, and on macOS the app swaps its own bundle for the new one.
+Nothing opens a browser. Only builds from source and distribution packages, which the
+app did not install, leave updating to you.
 
 ### About the security warnings
 
