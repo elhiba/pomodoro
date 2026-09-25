@@ -685,10 +685,22 @@ void	SpotifyClient::loadLibrary(const QString &section)
 			for (const QJsonValue &value : body.value(QStringLiteral("items")).toArray())
 			{
 				QJsonObject	playlist = value.toObject();
-				int			tracks = playlist.value(QStringLiteral("tracks")).toObject().value(QStringLiteral("total")).toInt();
 
-				items.append(collectionItem(QStringLiteral("playlist"), playlist,
-					QStringLiteral("%1 songs").arg(tracks)));
+				// Spotify renamed "tracks" to "items" in February 2026 and every count read
+				// 0; the old name stays as a fallback. A playlist the user neither owns nor
+				// collaborates on comes with no count at all, and says whose it is instead.
+				QJsonValue	count = playlist.value(QStringLiteral("items")).toObject().value(QStringLiteral("total"));
+
+				if (count.isUndefined())
+					count = playlist.value(QStringLiteral("tracks")).toObject().value(QStringLiteral("total"));
+
+				int		songs = count.toInt();
+				QString	subtitle = count.isUndefined()
+					? QStringLiteral("Playlist · ") + playlist.value(QStringLiteral("owner")).toObject()
+						.value(QStringLiteral("display_name")).toString()
+					: songs == 1 ? QStringLiteral("1 song") : QStringLiteral("%1 songs").arg(songs);
+
+				items.append(collectionItem(QStringLiteral("playlist"), playlist, subtitle));
 			}
 
 			return items;

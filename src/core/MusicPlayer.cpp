@@ -338,6 +338,11 @@ void	MusicPlayer::setSource(const QString &source)
 	else
 		_kind = Stream;
 
+	// canSkip depends on the kind as well as the queue. Without this, an app that started
+	// on Spotify kept the "cannot skip" it read before its source was set, and the panel's
+	// previous and next stayed greyed out.
+	emit queueChanged();
+
 	// Deliberately NOT handed to QMediaPlayer here. The FFmpeg backend opens the URL
 	// as soon as it is set, to probe the format, which would connect to the stream on
 	// every launch before the user has asked for any music. openStream() sets it.
