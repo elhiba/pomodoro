@@ -16,6 +16,11 @@ permissions:
 
 env:
   QT_VERSION: 6.6.3
+  # The built-in Spotify player (see src/core/SpotifyEngine.hpp), pinned and checked
+  # against the digests GitHub publishes for that release. Bump all three together.
+  GO_LIBRESPOT_VERSION: v0.10.1
+  GO_LIBRESPOT_SHA256_LINUX: bb504af82501eef8d50a1fe329d6998294e741a765aa0ececb1cfb7e75379310
+  GO_LIBRESPOT_SHA256_WINDOWS: e507c499d89ed5738dc585850f6916520d73a3d7f639f89761842a31e769039b
 
 # vars.SPOTIFY_CLIENT_ID (Settings -> Secrets and variables -> Actions -> Variables) is the
 # Spotify app the release signs in as. A Client ID is public by design; leaving the variable
@@ -55,6 +60,16 @@ jobs:
 
       - name: Stage AppDir
         run: DESTDIR="$PWD/AppDir" cmake --install build
+
+      # Beside the executable, where SpotifyEngine looks. Its decoders are built in; it
+      # needs only ALSA, which every desktop has and AppImages leave to the system.
+      - name: Bundle the Spotify player
+        run: |
+          curl -sSL -o go-librespot.tar.gz "https://github.com/devgianlu/go-librespot/releases/download/${GO_LIBRESPOT_VERSION}/go-librespot_linux_x86_64.tar.gz"
+          echo "${GO_LIBRESPOT_SHA256_LINUX}  go-librespot.tar.gz" | sha256sum -c -
+          mkdir -p AppDir/usr/bin/spotify
+          tar -xzf go-librespot.tar.gz -C AppDir/usr/bin/spotify go-librespot
+          chmod +x AppDir/usr/bin/spotify/go-librespot
 
       - name: Build AppImage
         env:
@@ -128,7 +143,45 @@ jobs:
           Get-ChildItem "$env:QT_ROOT_DIR/bin" -Include av*.dll, sw*.dll -Recurse |
             Copy-Item -Destination dist/pomodoro/ -Force
 
-          Compress-Archive -Path dist/pomodoro -DestinationPath "pomodoro-${{ github.ref_name }}-windows-x64.zip"
+      # The Windows build of go-librespot ships without the decoding libraries it links
+      # against; MSYS2's MINGW64 packages are the matching builds (it uses msvcrt).
+      - name: Install the Spotify player's libraries
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: mingw-w64-x86_64-flac mingw-w64-x86_64-libvorbis mingw-w64-x86_64-mpg123
+
+      # In spotify\ of its own, beside the exe: those libraries share file names with
+      # ones Qt's FFmpeg brings, built for another C runtime.
+      - name: Bundle the Spotify player
+        shell: pwsh
+        run: |
+          $url = "https://github.com/devgianlu/go-librespot/releases/download/$env:GO_LIBRESPOT_VERSION/go-librespot_windows_amd64.tar.gz"
+          Invoke-WebRequest $url -OutFile go-librespot.tar.gz
+
+          if ((Get-FileHash go-librespot.tar.gz -Algorithm SHA256).Hash -ne $env:GO_LIBRESPOT_SHA256_WINDOWS) {
+            throw "go-librespot does not match its published checksum"
+          }
+
+          New-Item -ItemType Directory -Force dist/pomodoro/spotify | Out-Null
+          tar -xzf go-librespot.tar.gz -C dist/pomodoro/spotify go-librespot.exe
+
+          $bin = Join-Path "${{ steps.msys2.outputs.msys2-location }}" "mingw64/bin"
+          foreach ($dll in 'libFLAC.dll', 'libmpg123-0.dll', 'libogg-0.dll', 'libvorbis-0.dll', 'libvorbisenc-2.dll', 'libwinpthread-1.dll') {
+            Copy-Item (Join-Path $bin $dll) dist/pomodoro/spotify/
+          }
+
+          # A missing library would only show on a user's machine as "DLL not found"
+          # (0xC0000135). Starting it once here turns that into a failed build.
+          & dist/pomodoro/spotify/go-librespot.exe --this-flag-does-not-exist 2>$null
+          if ($LASTEXITCODE -eq -1073741515) { throw "go-librespot is missing a DLL" }
+          $global:LASTEXITCODE = 0
+
+      - name: Zip the portable folder
+        shell: pwsh
+        run: Compress-Archive -Path dist/pomodoro -DestinationPath "pomodoro-${{ github.ref_name }}-windows-x64.zip"
 
       # Signing is what stops SmartScreen calling the app an unrecognised program from an
       # unknown publisher. It only runs once a certificate is configured; without the
