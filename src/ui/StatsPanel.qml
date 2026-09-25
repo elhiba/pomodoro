@@ -135,11 +135,25 @@ Item
 			anchors.bottom: parent.bottom
 			anchors.left: parent.left
 			anchors.right: parent.right
-			anchors.margins: 20
+			anchors.topMargin: 20
+			anchors.bottomMargin: 20
+			anchors.leftMargin: 20
+			anchors.rightMargin: 4
+
+			// The text keeps its 20 pixel margin; the bar lives in the gap beside it
+			// instead of on top of it.
+			rightPadding: 16
 
 			clip: true
 			contentWidth: availableWidth
 			ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+			ScrollBar.vertical: SlimScrollBar
+			{
+				parent: body
+				x: body.width - width
+				y: body.topPadding
+				height: body.availableHeight
+			}
 
 			Column
 			{

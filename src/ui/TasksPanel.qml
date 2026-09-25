@@ -191,7 +191,7 @@ Item
 
 			model: rootPanel.tasks
 
-			ScrollBar.vertical: ScrollBar {}
+			ScrollBar.vertical: SlimScrollBar {}
 
 			delegate: Rectangle
 			{

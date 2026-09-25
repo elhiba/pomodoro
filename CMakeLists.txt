@@ -198,6 +198,7 @@ set(POMODORO_QML_FILES
 	src/ui/MiniTimer.qml
 	src/ui/TasksPanel.qml
 	src/ui/SourceTabs.qml
+	src/ui/SlimScrollBar.qml
 	src/ui/MusicPanel.qml
 )
 

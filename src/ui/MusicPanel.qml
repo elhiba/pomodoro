@@ -418,7 +418,7 @@ Item
 
 				model: rootPanel.stations
 
-				ScrollBar.vertical: ScrollBar {}
+				ScrollBar.vertical: SlimScrollBar {}
 
 				delegate: Item
 				{
@@ -1158,7 +1158,7 @@ Item
 		spacing: 2
 		boundsBehavior: Flickable.StopAtBounds
 
-		ScrollBar.vertical: ScrollBar {}
+		ScrollBar.vertical: SlimScrollBar {}
 
 		delegate: Rectangle
 		{
