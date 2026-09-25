@@ -529,6 +529,36 @@ Window
 	// changed, and turns the seconds left into Discord's own countdown.
 	readonly property string logoUrl: "https://raw.githubusercontent.com/elhiba/pomodoro/main/assets/icons/pomodoroLogoTransport.png"
 
+	// Between sessions Discord gets one of these, picked afresh each time the timer
+	// stops -- unless the user wrote their own in the settings.
+	readonly property var idleLines: [
+		{ details: "Sharpening pencils", state: "Next round loading…" },
+		{ details: "Brewing a coffee", state: "Focus mode warming up" },
+		{ details: "Rereading the notes", state: "Between sessions" },
+		{ details: "Stretching the brain", state: "Warm-up time" },
+		{ details: "Planning the next sprint", state: "Tasks lined up" },
+		{ details: "Taking a breather", state: "Back in a bit" },
+		{ details: "Tidying the desk", state: "Getting set to focus" },
+		{ details: "Snacking for brain power", state: "Refuelling" },
+		{ details: "Picking the perfect playlist", state: "Almost ready" },
+		{ details: "Learning something new", state: "One pomodoro at a time" },
+		{ details: "Chilling", state: "Taking it easy" },
+		{ details: "Staring at the to-do list", state: "It stares back" }
+	]
+
+	property int idleLine: Math.floor(Math.random() * mainWindow.idleLines.length)
+
+	Connections
+	{
+		target: pomodoroTimer
+
+		function onStateChanged()
+		{
+			if (pomodoroTimer.state === PomodoroTimer.Idle)
+				mainWindow.idleLine = Math.floor(Math.random() * mainWindow.idleLines.length)
+		}
+	}
+
 	readonly property var discordActivity:
 	{
 		let running = pomodoroTimer.state === PomodoroTimer.Running
@@ -548,11 +578,17 @@ Window
 		let rounds = pomodoroTimer.roundsBeforeLongBreak
 		let round = pomodoroTimer.completedRounds % rounds + 1
 
+		let idle = mainWindow.idleLines[mainWindow.idleLine]
+		let custom = AppSettings.discordIdleText.trim()
+
 		return {
-			details: running ? modeText : paused ? modeText + " · paused" : "Chilling",
+			details: running ? modeText : paused ? modeText + " · paused"
+				: custom.length > 0 ? custom : idle.details,
 			state: song ? songLine
 				: running && pomodoroTimer.mode === PomodoroTimer.Focus ? "Round " + round + " of " + rounds
-				: running ? "Recharging" : "Taking it easy",
+				: running ? "Recharging"
+				: paused ? "Back in a moment"
+				: custom.length > 0 ? "Between sessions" : idle.state,
 			endsIn: running ? pomodoroTimer.remainingSeconds : -1,
 			largeImage: cover ? MusicPlayer.artUrl : mainWindow.logoUrl,
 			largeText: cover ? MusicPlayer.title : "Pomodoro",
@@ -994,6 +1030,69 @@ Window
 	}
 
 	// Absolutely last, so the window can still be resized while a drawer is open.
+	// Discord at a glance, in the corner: its logo, faint so the timer stays what the eye
+	// goes to, with a green dot while Discord shows the activity. A click switches the
+	// sharing on or off; the tooltip says which it is.
+	Item
+	{
+		id: discordCorner
+
+		anchors.right: parent.right
+		anchors.bottom: parent.bottom
+		anchors.rightMargin: 14
+		anchors.bottomMargin: 12
+
+		width: 26
+		height: 26
+		visible: DiscordPresence.available
+		opacity: discordCornerHover.hovered ? 0.95 : DiscordPresence.connected ? 0.45 : 0.25
+
+		Behavior on opacity
+		{
+			NumberAnimation { duration: 150 }
+		}
+
+		Image
+		{
+			anchors.fill: parent
+			source: "assets/icons/discord.svg"
+			sourceSize.width: 52
+			sourceSize.height: 52
+		}
+
+		Rectangle
+		{
+			anchors.right: parent.right
+			anchors.bottom: parent.bottom
+			anchors.rightMargin: -3
+			anchors.bottomMargin: -3
+
+			width: 10
+			height: 10
+			radius: 5
+			color: DiscordPresence.connected ? "#3ba55d" : "#80848e"
+			border.color: Qt.darker(mainWindow.themeColor, 1.3)
+			border.width: 2
+		}
+
+		HoverHandler
+		{
+			id: discordCornerHover
+			cursorShape: Qt.PointingHandCursor
+		}
+
+		TapHandler
+		{
+			onTapped: DiscordPresence.enabled = !DiscordPresence.enabled
+		}
+
+		ToolTip.visible: discordCornerHover.hovered
+		ToolTip.delay: 400
+		ToolTip.text: !DiscordPresence.enabled ? "Discord: off. Click to show your activity."
+			: DiscordPresence.connected ? DiscordPresence.statusText + ". Click to stop sharing."
+			: "Discord: waiting for the app to open. Click to stop."
+	}
+
 	ResizeHandles {}
 
 }

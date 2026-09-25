@@ -76,6 +76,8 @@ class AppSettings : public QObject
 	// Minimising takes the window out of Alt+Tab and the taskbar; the mini timer or the
 	// tray icon brings it back.
 	Q_PROPERTY(bool hideWhenMinimized READ hideWhenMinimized WRITE setHideWhenMinimized NOTIFY hideWhenMinimizedChanged)
+	// What Discord shows between sessions, as the user wrote it; empty picks a random line.
+	Q_PROPERTY(QString discordIdleText READ discordIdleText WRITE setDiscordIdleText NOTIFY discordIdleTextChanged)
 
 	// Handy for the settings panel, so the bounds live in one place instead of
 	// being repeated in QML.
@@ -156,6 +158,7 @@ class AppSettings : public QObject
 		bool	fontOnTitle() const;
 		bool	discordShowMusic() const;
 		bool	hideWhenMinimized() const;
+		QString	discordIdleText() const;
 
 		int		minimumMinutes() const;
 		int		maximumMinutes() const;
@@ -193,6 +196,7 @@ class AppSettings : public QObject
 		void	setFontOnTitle(bool value);
 		void	setDiscordShowMusic(bool value);
 		void	setHideWhenMinimized(bool value);
+		void	setDiscordIdleText(const QString &value);
 
 	public slots:
 		void	restoreDefaults();
@@ -229,6 +233,7 @@ class AppSettings : public QObject
 		void	fontOnTitleChanged();
 		void	discordShowMusicChanged();
 		void	hideWhenMinimizedChanged();
+		void	discordIdleTextChanged();
 
 	private:
 		QSettings	_store;
@@ -265,6 +270,7 @@ class AppSettings : public QObject
 		bool	_fontOnTitle = DefaultFontOnTitle;
 		bool	_discordShowMusic = DefaultDiscordShowMusic;
 		bool	_hideWhenMinimized = DefaultHideWhenMinimized;
+		QString	_discordIdleText;
 
 		void	load();
 		void	store(const char *key, const QVariant &value);

@@ -739,6 +739,43 @@ Item
 
 					Text
 					{
+						text: "Between sessions, show"
+						color: "white"
+						font.pixelSize: 15
+						topPadding: 8
+						bottomPadding: 6
+					}
+
+					// Empty means a random line each time the timer stops.
+					TextField
+					{
+						id: idleTextField
+
+						width: parent.width
+						height: 36
+						leftPadding: 12
+						rightPadding: 12
+
+						text: AppSettings.discordIdleText
+						placeholderText: "A random line, e.g. “Sharpening pencils”"
+						placeholderTextColor: Qt.rgba(1, 1, 1, 0.45)
+						color: "white"
+						font.pixelSize: 14
+						selectByMouse: true
+						maximumLength: 100
+
+						background: Rectangle
+						{
+							radius: 10
+							color: Qt.rgba(0, 0, 0, 0.2)
+							border.color: idleTextField.activeFocus ? Qt.rgba(1, 1, 1, 0.5) : Qt.rgba(1, 1, 1, 0.18)
+						}
+
+						onEditingFinished: AppSettings.discordIdleText = idleTextField.text.trim()
+					}
+
+					Text
+					{
 						width: parent.width
 						bottomPadding: 8
 						text: "Your profile shows “Playing Pomodoro” with what the timer is doing, while the Discord app is open on this computer."
