@@ -301,6 +301,96 @@ void	SpotifyClient::seek(qint64 milliseconds)
 		[this](int, const QJsonObject &, const QString &) { QTimer::singleShot(400, this, &SpotifyClient::poll); });
 }
 
+bool	SpotifyClient::currentLiked() const
+{
+	return _liked;
+}
+
+bool	SpotifyClient::hasCurrentTrack() const
+{
+	return _trackUri.startsWith(QLatin1String("spotify:track:"));
+}
+
+void	SpotifyClient::addToQueue(const QString &uri)
+{
+	if (uri.isEmpty())
+		return;
+
+	auto	done = [this](bool ok)
+	{
+		emit notice(ok ? QStringLiteral("Added to the queue") : QStringLiteral("Spotify would not queue that"));
+	};
+
+	if (_engine.available())
+	{
+		if (!_engine.ready())
+		{
+			emit notice(QStringLiteral("Play something first, then queue more"));
+			return;
+		}
+
+		_engine.call("POST", QStringLiteral("/player/add_to_queue"), QJsonObject{ { QStringLiteral("uri"), uri } },
+			[done](int status, const QJsonObject &) { done(status >= 200 && status < 300); });
+		return;
+	}
+
+	api("POST", QStringLiteral("/v1/me/player/queue?uri=") + QString::fromLatin1(QUrl::toPercentEncoding(uri)),
+		QJsonObject(), [done](int status, const QJsonObject &, const QString &) { done(status >= 200 && status < 300); });
+}
+
+// Spotify's library endpoints since February 2026: PUT/DELETE /me/library and
+// GET /me/library/contains, all taking URIs.
+void	SpotifyClient::toggleLike()
+{
+	if (!hasCurrentTrack() || !canSearch())
+		return;
+
+	bool	like = !_liked;
+	QString	uri = _trackUri;
+
+	// Shown at once; put back if Spotify refuses.
+	_liked = like;
+	emit nowPlayingChanged();
+
+	api(like ? "PUT" : "DELETE", QStringLiteral("/v1/me/library?uris=") + QString::fromLatin1(QUrl::toPercentEncoding(uri)),
+		QJsonObject(), [this, like, uri](int status, const QJsonObject &, const QString &)
+		{
+			bool	ok = status >= 200 && status < 300;
+
+			if (!ok && uri == _trackUri)
+			{
+				_liked = !like;
+				emit nowPlayingChanged();
+			}
+
+			emit notice(!ok ? QStringLiteral("Spotify would not change your Liked Songs")
+				: like ? QStringLiteral("Added to Liked Songs") : QStringLiteral("Removed from Liked Songs"));
+		});
+}
+
+// A new song: find out whether it is liked, where the Web API can be asked.
+void	SpotifyClient::setTrackUri(const QString &uri)
+{
+	if (uri == _trackUri)
+		return;
+
+	_trackUri = uri;
+	_liked = false;
+
+	if (!hasCurrentTrack() || !canSearch())
+		return;
+
+	api("GET", QStringLiteral("/v1/me/library/contains?uris=") + QString::fromLatin1(QUrl::toPercentEncoding(uri)),
+		QJsonObject(), [this, uri](int status, const QJsonObject &answer, const QString &)
+		{
+			if (status != 200 || uri != _trackUri)
+				return;
+
+			_liked = answer.value(QStringLiteral("array")).toArray().first().toBool();
+			emit nowPlayingChanged();
+		});
+}
+
 QString	SpotifyClient::contextName() const
 {
 	return _contextNames.value(_contextUri);
@@ -1342,6 +1432,7 @@ void	SpotifyClient::poll()
 
 				setContext(body.value(QStringLiteral("context")).toObject().value(QStringLiteral("uri")).toString(),
 					QString());
+				setTrackUri(item.value(QStringLiteral("uri")).toString());
 
 				QJsonArray	images = item.value(QStringLiteral("album")).toObject().value(QStringLiteral("images")).toArray();
 
@@ -1522,6 +1613,7 @@ void	SpotifyClient::playerPoll()
 
 		setContext(body.value(QStringLiteral("context_uri")).toString(),
 			body.value(QStringLiteral("context_name")).toString());
+		setTrackUri(track.value(QStringLiteral("uri")).toString());
 
 		if (title == _track && artist == _artist && playing == _isPlaying && art == _artUrl)
 			return;
@@ -1594,8 +1686,14 @@ void	SpotifyClient::api(const QByteArray &verb, const QString &path, const QJson
 	{
 		reply->deleteLater();
 
-		int			status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-		QJsonObject	answer = QJsonDocument::fromJson(reply->readAll()).object();
+		int				status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+		QJsonDocument	document = QJsonDocument::fromJson(reply->readAll());
+
+		// A few endpoints (/me/library/contains) answer with a bare list; handed on as
+		// {"array": [...]} so every handler takes the same shape.
+		QJsonObject	answer = document.isArray()
+			? QJsonObject{ { QStringLiteral("array"), document.array() } }
+			: document.object();
 
 		// The token lapsed early (revoked, clock skew). One fresh token, one retry.
 		if (status == 401 && !retried)

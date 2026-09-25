@@ -248,6 +248,9 @@ qt_add_qml_module(pomodoro
 		assets/icons/search.svg
 		assets/icons/musicNote.svg
 		assets/icons/skipNext.svg
+		assets/icons/heart.svg
+		assets/icons/heartFilled.svg
+		assets/icons/queueAdd.svg
 		assets/icons/skipPrevious.svg
 		assets/icons/playSolid.svg
 		assets/icons/pauseSolid.svg

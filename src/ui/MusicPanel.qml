@@ -276,6 +276,23 @@ Item
 
 				spacing: 4
 
+				// Like the song playing now. Only where Spotify lets us save it (a
+				// developer key); hidden rather than offered and refused.
+				TransportButton
+				{
+					visible: rootPanel.source === "spotify" && MusicPlayer.spotify.canSearch
+						&& MusicPlayer.spotify.hasCurrentTrack
+					iconSource: MusicPlayer.spotify.currentLiked ? "assets/icons/heartFilled.svg" : "assets/icons/heart.svg"
+					iconColor: MusicPlayer.spotify.currentLiked ? "#1ed760" : "white"
+
+					ToolTip.visible: hovered
+					ToolTip.delay: 500
+					ToolTip.text: MusicPlayer.spotify.currentLiked ? "Remove from Liked Songs" : "Add to Liked Songs"
+
+					onClicked:
+						MusicPlayer.spotify.toggleLike()
+				}
+
 				TransportButton
 				{
 					iconSource: "assets/icons/skipPrevious.svg"
@@ -303,6 +320,39 @@ Item
 					onClicked:
 						rootPanel.skipRequested(1)
 				}
+			}
+		}
+
+		// "Added to the queue" and the like, over the bottom of the card.
+		Rectangle
+		{
+			id: noticePill
+
+			anchors.horizontalCenter: parent.horizontalCenter
+			anchors.bottom: parent.bottom
+			anchors.bottomMargin: 16
+			z: 10
+
+			width: noticeText.implicitWidth + 28
+			height: 32
+			radius: 16
+			color: "#f2ffffff"
+			opacity: 0
+			visible: opacity > 0
+
+			Behavior on opacity
+			{
+				NumberAnimation { duration: 200 }
+			}
+
+			Text
+			{
+				id: noticeText
+
+				anchors.centerIn: parent
+				color: "#333333"
+				font.pixelSize: 12
+				font.bold: true
 			}
 		}
 
@@ -1239,6 +1289,9 @@ Item
 
 					// A playlist or album opens to its songs when the built-in player can
 					// list them; a song plays.
+					queueable: true
+					onQueueRequested: (item) => MusicPlayer.spotify.addToQueue(item.uri)
+
 					onActivated: (index, item) =>
 					{
 						if (item.kind !== "track" && MusicPlayer.spotify.builtInPlayer)
@@ -1322,6 +1375,9 @@ Item
 						message: MusicPlayer.spotify.resultsError.length > 0
 							? MusicPlayer.spotify.resultsError
 							: "Reading the songs…"
+
+						queueable: true
+						onQueueRequested: (item) => MusicPlayer.spotify.addToQueue(item.uri)
 
 						onActivated: (index, item) => MusicPlayer.playSpotifyResult(index)
 					}
@@ -1844,6 +1900,25 @@ Item
 		visible: false
 	}
 
+	Connections
+	{
+		target: MusicPlayer.spotify
+
+		function onNotice(text)
+		{
+			noticeText.text = text
+			noticePill.opacity = 1
+			noticeTimer.restart()
+		}
+	}
+
+	Timer
+	{
+		id: noticeTimer
+		interval: 2200
+		onTriggered: noticePill.opacity = 0
+	}
+
 	function lookUpSpotifyLink(text)
 	{
 		addSpotifyForm.foundUri = ""
@@ -2083,8 +2158,12 @@ Item
 		property bool wideImages: false
 		property var suggestions: []
 
+		// Songs get an "add to queue" button (Spotify lists).
+		property bool queueable: false
+
 		signal activated(int index, var item)
 		signal suggestionPicked(string text)
+		signal queueRequested(var item)
 
 		clip: true
 		spacing: 2
@@ -2156,7 +2235,7 @@ Item
 				anchors.left: thumb.right
 				anchors.leftMargin: 10
 				anchors.right: parent.right
-				anchors.rightMargin: resultRow.collection ? 26 : 8
+				anchors.rightMargin: resultRow.collection ? 26 : queueBtn.visible ? 44 : 8
 				anchors.verticalCenter: parent.verticalCenter
 
 				spacing: 2
@@ -2192,6 +2271,41 @@ Item
 				text: "›"
 				color: Qt.rgba(1, 1, 1, 0.6)
 				font.pixelSize: 20
+			}
+
+			// Plays after the current song rather than instead of it. Faint until the row
+			// is hovered, so a long list does not turn into a column of buttons.
+			Button
+			{
+				id: queueBtn
+
+				anchors.right: parent.right
+				anchors.rightMargin: 6
+				anchors.verticalCenter: parent.verticalCenter
+
+				width: 32
+				height: 32
+
+				visible: list.queueable && resultRow.modelData.kind === "track"
+				opacity: resultHover.hovered || queueBtn.hovered ? 1.0 : 0.35
+
+				background: Rectangle
+				{
+					radius: 16
+					color: queueBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : "transparent"
+				}
+
+				icon.source: "assets/icons/queueAdd.svg"
+				icon.color: "white"
+				icon.width: 18
+				icon.height: 18
+
+				ToolTip.visible: queueBtn.hovered
+				ToolTip.delay: 500
+				ToolTip.text: "Play next"
+
+				onClicked:
+					list.queueRequested(resultRow.modelData)
 			}
 
 			HoverHandler

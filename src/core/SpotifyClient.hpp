@@ -97,6 +97,11 @@ class SpotifyClient : public QObject
 	// "Search". Empty until known.
 	Q_PROPERTY(QString contextName READ contextName NOTIFY nowPlayingChanged)
 
+	// Whether the song playing now is in the user's Liked Songs. Saving needs the Web
+	// API, so it only works where search does (canSearch); the heart is hidden otherwise.
+	Q_PROPERTY(bool currentLiked READ currentLiked NOTIFY nowPlayingChanged)
+	Q_PROPERTY(bool hasCurrentTrack READ hasCurrentTrack NOTIFY nowPlayingChanged)
+
 	public:
 		explicit SpotifyClient(QObject *parent = nullptr);
 
@@ -123,6 +128,8 @@ class SpotifyClient : public QObject
 		void	seek(qint64 milliseconds);
 
 		QString	contextName() const;
+		bool	currentLiked() const;
+		bool	hasCurrentTrack() const;
 
 		QString	openedUri() const;
 		QString	openedTitle() const;
@@ -165,6 +172,12 @@ class SpotifyClient : public QObject
 		// only; it reads them without the Web API). closeContext() puts back what was
 		// listed before; playOpened() plays the whole list from the top.
 		Q_INVOKABLE void	openContext(const QString &uri, const QString &title);
+
+		// Puts a song after the one playing. Answers with notice().
+		Q_INVOKABLE void	addToQueue(const QString &uri);
+
+		// Adds the song playing now to Liked Songs, or takes it out again.
+		Q_INVOKABLE void	toggleLike();
 		Q_INVOKABLE void	closeContext();
 		Q_INVOKABLE void	playOpened();
 
@@ -188,6 +201,10 @@ class SpotifyClient : public QObject
 		void	playbackStarted();
 		void	playbackFailed(const QString &reason);
 		void	resultsChanged();
+
+		// A short confirmation or refusal for the panel to show and let fade ("Added to
+		// the queue").
+		void	notice(const QString &text);
 
 		// uri is empty when the link was not one; error then says why.
 		void	linkLookedUp(const QString &uri, const QString &title, const QString &image, const QString &error);
@@ -233,6 +250,8 @@ class SpotifyClient : public QObject
 		QList<std::function<void()>>	_waitingForToken;
 
 		QString	_track;
+		QString	_trackUri;
+		bool	_liked = false;
 		QString	_artist;
 		QString	_artUrl;
 		bool	_isPlaying = false;
@@ -274,6 +293,7 @@ class SpotifyClient : public QObject
 		void	playerPoll();
 		void	fetchContext(const QString &uri, int generation, int attempt);
 		void	setContext(const QString &uri, const QString &reportedName);
+		void	setTrackUri(const QString &uri);
 		void	fetchResults(const QString &path, std::function<QVariantList(const QJsonObject &)> parse);
 		void	finishConnecting(const QString &error);
 		void	startWebSignIn();
