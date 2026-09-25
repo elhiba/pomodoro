@@ -102,11 +102,17 @@ class SpotifyEngine : public QObject
 		QString	_errorText;
 		QString	_signInUrl;
 		bool	_openSignIn = false;
+
+		// Whether go-librespot holds a stored login. Read from its own state.json rather
+		// than kept as a flag of ours: two records of one fact drifted apart once (the
+		// player signed in, the flag gone), and the panel and the player disagreed.
+		bool	_remembered = false;
 		quint16	_port = 0;
 
 		QList<std::function<void()>>	_waiting;
 
 		QString	configDir() const;
+		bool	readRemembered() const;
 		void	launch();
 		void	writeConfig();
 		void	onOutput();

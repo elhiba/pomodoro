@@ -26,9 +26,8 @@
 
 namespace
 {
-	// Set once the player has been signed in, cleared on sign-out. go-librespot keeps the
-	// credentials itself; this only says whether it is worth starting it at launch.
-	const char *const	KeySignedIn = "spotify/playerSignedIn";
+	// A flag the first version kept beside go-librespot's own record; removed on sight.
+	const char *const	KeyOldSignedIn = "spotify/playerSignedIn";
 
 	// go-librespot logs the sign-in link as: ... msg="to complete authentication visit
 	// the following link: https://accounts.spotify.com/authorize?..."
@@ -80,6 +79,10 @@ SpotifyEngine::SpotifyEngine(QObject *parent)
 
 	if (!QFile::exists(executablePath()))
 		_state = Missing;
+
+	QSettings().remove(QLatin1String(KeyOldSignedIn));
+
+	_remembered = available() && readRemembered();
 }
 
 SpotifyEngine::~SpotifyEngine()
@@ -104,7 +107,7 @@ bool	SpotifyEngine::ready() const
 
 bool	SpotifyEngine::remembered() const
 {
-	return available() && QSettings().value(QLatin1String(KeySignedIn)).toBool();
+	return _remembered;
 }
 
 QString	SpotifyEngine::username() const
@@ -164,7 +167,7 @@ void	SpotifyEngine::signOut()
 
 	// state.json holds the stored credentials; without it the next start asks again.
 	QFile::remove(configDir() + QStringLiteral("/state.json"));
-	QSettings().remove(QLatin1String(KeySignedIn));
+	_remembered = false;
 
 	_username.clear();
 	_deviceId.clear();
@@ -190,15 +193,18 @@ void	SpotifyEngine::whenReady(std::function<void()> then)
 		return;
 	}
 
+	// Waiting on the user in a browser tab can take minutes; whatever asked is told now
+	// that the player is not ready, rather than hanging on it.
+	if (_state == SigningIn || ((_state == Stopped || _state == Failed) && !_remembered))
+	{
+		then();
+		return;
+	}
+
 	_waiting.append(std::move(then));
 
 	if (_state == Stopped || _state == Failed)
-	{
-		if (remembered())
-			launch();
-		else
-			release();
-	}
+		launch();
 }
 
 void	SpotifyEngine::call(const QByteArray &verb, const QString &path, const QJsonObject &body, Reply reply)
@@ -233,6 +239,19 @@ void	SpotifyEngine::call(const QByteArray &verb, const QString &path, const QJso
 
 		reply(status, QJsonDocument::fromJson(answer->readAll()).object());
 	});
+}
+
+bool	SpotifyEngine::readRemembered() const
+{
+	QFile	file(configDir() + QStringLiteral("/state.json"));
+
+	if (!file.open(QIODevice::ReadOnly))
+		return false;
+
+	QJsonObject	credentials = QJsonDocument::fromJson(file.readAll()).object()
+		.value(QStringLiteral("credentials")).toObject();
+
+	return !credentials.value(QStringLiteral("data")).toString().isEmpty();
 }
 
 QString	SpotifyEngine::configDir() const
@@ -329,6 +348,9 @@ void	SpotifyEngine::writeConfig()
 		"  address: 127.0.0.1\n"
 		"  port: " + QByteArray::number(_port) + "\n"
 		"volume_steps: 100\n"
+		"metadata:\n"
+		"  enabled: true\n"
+		"  max_tracks: 500\n"
 		"log_level: info\n";
 
 	file.write(config);
@@ -358,7 +380,7 @@ void	SpotifyEngine::onOutput()
 			{
 				// Started on its own with credentials Spotify no longer accepts. Nobody
 				// asked for a browser tab; whatever was waiting to play is told instead.
-				QSettings().remove(QLatin1String(KeySignedIn));
+				_remembered = false;
 				_errorText = QStringLiteral("Sign in with Spotify again.");
 				release();
 			}
@@ -406,7 +428,7 @@ void	SpotifyEngine::pollStatus()
 		_statusTimer.stop();
 		_timeout.stop();
 
-		QSettings().setValue(QLatin1String(KeySignedIn), true);
+		_remembered = true;
 
 		setState(Ready);
 		release();

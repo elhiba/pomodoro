@@ -11,6 +11,9 @@ MusicPlayer::MusicPlayer(QObject *parent)
 
 	_retryTimer.setSingleShot(true);
 	_duckTimer.setSingleShot(true);
+	_positionTimer.setInterval(PositionTickMs);
+
+	connect(&_positionTimer, &QTimer::timeout, this, &MusicPlayer::positionChanged);
 
 	rebuildPlayer();
 
@@ -56,6 +59,15 @@ MusicPlayer::MusicPlayer(QObject *parent)
 	connect(_spotify, &SpotifyClient::playbackStarted, this, &MusicPlayer::onSpotifyStarted);
 	connect(_spotify, &SpotifyClient::playbackFailed, this, &MusicPlayer::onSpotifyFailed);
 	connect(_spotify, &SpotifyClient::nowPlayingChanged, this, &MusicPlayer::updateNowPlaying);
+	connect(_spotify, &SpotifyClient::nowPlayingChanged, this, &MusicPlayer::positionChanged);
+
+	// Signed out while Spotify was on: nothing can play or resume any more, so the player
+	// goes back to idle instead of showing a song it can no longer reach.
+	connect(_spotify, &SpotifyClient::stateChanged, this, [this]()
+	{
+		if (_kind == Spotify && !_spotify->connected() && !_spotify->connecting() && _status != Idle)
+			stop();
+	});
 }
 
 QString	MusicPlayer::source() const
@@ -352,6 +364,55 @@ void	MusicPlayer::setVolume(qreal volume)
 		_spotify->setPlayerVolume(_ducked ? _volume * DuckLevel : _volume);
 
 	emit volumeChanged();
+}
+
+qint64	MusicPlayer::position() const
+{
+	switch (_kind)
+	{
+		case YouTube:
+			return _player->position();
+		case Spotify:
+			return _spotify->positionMs();
+		default:
+			return 0;
+	}
+}
+
+qint64	MusicPlayer::duration() const
+{
+	switch (_kind)
+	{
+		case YouTube:
+			return _youtubeLive ? 0 : _player->duration();
+		case Spotify:
+			return _spotify->durationMs();
+		default:
+			return 0;
+	}
+}
+
+bool	MusicPlayer::seekable() const
+{
+	if (duration() <= 0 || _status == Idle || _status == Failed)
+		return false;
+
+	return _kind == Spotify || (_kind == YouTube && _player->isSeekable());
+}
+
+void	MusicPlayer::seek(qint64 milliseconds)
+{
+	if (!seekable())
+		return;
+
+	milliseconds = qBound(qint64(0), milliseconds, duration());
+
+	if (_kind == Spotify)
+		_spotify->seek(milliseconds);
+	else
+		_player->setPosition(milliseconds);
+
+	emit positionChanged();
 }
 
 void	MusicPlayer::duck(int milliseconds)
@@ -670,6 +731,13 @@ void	MusicPlayer::setStatus(Status status, const QString &errorText)
 		return;
 
 	_status = status;
+
+	if (_status == Playing)
+		_positionTimer.start();
+	else
+		_positionTimer.stop();
+
+	emit positionChanged();
 	_errorText = errorText;
 
 	emit statusChanged();
@@ -786,6 +854,8 @@ void	MusicPlayer::rebuildPlayer()
 	connect(_player, &QMediaPlayer::playbackStateChanged, this, &MusicPlayer::onPlaybackStateChanged);
 	connect(_player, &QMediaPlayer::mediaStatusChanged, this, &MusicPlayer::onMediaStatusChanged);
 	connect(_player, &QMediaPlayer::errorOccurred, this, &MusicPlayer::onErrorOccurred);
+	connect(_player, &QMediaPlayer::durationChanged, this, &MusicPlayer::positionChanged);
+	connect(_player, &QMediaPlayer::seekableChanged, this, &MusicPlayer::positionChanged);
 	connect(_player, &QMediaPlayer::metaDataChanged, this, &MusicPlayer::onBackendMetaDataChanged);
 }
 

@@ -291,6 +291,72 @@ Item
 			}
 		}
 
+		// ---------------------------------------------------------------- timeline
+
+		// Where in the song playback is; drag or tap to jump.
+		Item
+		{
+			id: timeline
+
+			anchors.top: nowPlaying.bottom
+			anchors.topMargin: MusicPlayer.seekable ? 8 : 0
+			anchors.left: parent.left
+			anchors.right: parent.right
+			anchors.leftMargin: 18
+			anchors.rightMargin: 18
+
+			// Songs and videos only: a radio station or a live stream has no length.
+			visible: MusicPlayer.seekable
+			height: MusicPlayer.seekable ? 24 : 0
+
+			Text
+			{
+				id: elapsedText
+
+				anchors.left: parent.left
+				anchors.verticalCenter: parent.verticalCenter
+
+				width: 38
+				text: rootPanel.clock(seekBar.dragging
+					? seekBar.shownValue * MusicPlayer.duration
+					: MusicPlayer.position)
+				color: Qt.rgba(1, 1, 1, 0.7)
+				font.pixelSize: 11
+				font.family: "JetBrains Mono"
+			}
+
+			SquigglySlider
+			{
+				id: seekBar
+
+				anchors.left: elapsedText.right
+				anchors.right: totalText.left
+				anchors.leftMargin: 6
+				anchors.rightMargin: 6
+				anchors.verticalCenter: parent.verticalCenter
+
+				value: MusicPlayer.duration > 0 ? MusicPlayer.position / MusicPlayer.duration : 0
+				playing: MusicPlayer.status === MusicPlayer.Playing
+
+				onSeekRequested: (fraction) => MusicPlayer.seek(Math.round(fraction * MusicPlayer.duration))
+			}
+
+			Text
+			{
+				id: totalText
+
+				anchors.right: parent.right
+				anchors.verticalCenter: parent.verticalCenter
+
+				width: 38
+				horizontalAlignment: Text.AlignRight
+				text: rootPanel.clock(MusicPlayer.duration)
+				color: Qt.rgba(1, 1, 1, 0.7)
+				font.pixelSize: 11
+				font.family: "JetBrains Mono"
+			}
+		}
+
 		// ---------------------------------------------------------------- volume
 
 		// The music's volume and whether it plays only while focusing -- the two things
@@ -299,7 +365,7 @@ Item
 		{
 			id: mixer
 
-			anchors.top: nowPlaying.bottom
+			anchors.top: timeline.bottom
 			anchors.topMargin: 6
 			anchors.left: parent.left
 			anchors.right: parent.right
@@ -1149,14 +1215,101 @@ Item
 					anchors.right: parent.right
 
 					visible: MusicPlayer.spotify.connected && MusicPlayer.spotify.canSearch
+						&& MusicPlayer.spotify.openedUri.length === 0
 					model: MusicPlayer.spotify.results
 					busy: MusicPlayer.spotify.searching
 					message: MusicPlayer.spotify.resultsError.length > 0
 						? MusicPlayer.spotify.resultsError
 						: "Search, or pick one of your lists above."
 
+					// A playlist or album opens to its songs when the built-in player can
+					// list them; a song plays.
 					onActivated: (index, item) =>
-						MusicPlayer.playSpotifyResult(index)
+					{
+						if (item.kind !== "track" && MusicPlayer.spotify.builtInPlayer)
+							MusicPlayer.spotify.openContext(item.uri, item.title)
+						else
+							MusicPlayer.playSpotifyResult(index)
+					}
+				}
+
+				// An opened playlist, album or Liked Songs: its songs, with back and play all.
+				Item
+				{
+					id: spotifyOpened
+
+					anchors.top: spotifyTop.bottom
+					anchors.topMargin: 8
+					anchors.bottom: parent.bottom
+					anchors.left: parent.left
+					anchors.right: parent.right
+
+					visible: MusicPlayer.spotify.connected && MusicPlayer.spotify.openedUri.length > 0
+
+					Item
+					{
+						id: openedHeader
+
+						anchors.top: parent.top
+						anchors.left: parent.left
+						anchors.right: parent.right
+						height: 36
+
+						Chip
+						{
+							id: openedBack
+
+							anchors.left: parent.left
+							anchors.verticalCenter: parent.verticalCenter
+							label: "‹ Back"
+
+							onClicked: MusicPlayer.spotify.closeContext()
+						}
+
+						Text
+						{
+							anchors.left: openedBack.right
+							anchors.leftMargin: 10
+							anchors.right: playAllBtn.left
+							anchors.rightMargin: 10
+							anchors.verticalCenter: parent.verticalCenter
+
+							text: MusicPlayer.spotify.openedTitle
+							textFormat: Text.PlainText
+							color: "white"
+							font.pixelSize: 14
+							font.bold: true
+							elide: Text.ElideRight
+						}
+
+						PillButton
+						{
+							id: playAllBtn
+
+							anchors.right: parent.right
+							anchors.verticalCenter: parent.verticalCenter
+							label: "Play all"
+
+							onClicked: rootPanel.spotifyPicked(MusicPlayer.spotify.openedUri)
+						}
+					}
+
+					ResultList
+					{
+						anchors.top: openedHeader.bottom
+						anchors.topMargin: 6
+						anchors.bottom: parent.bottom
+						anchors.left: parent.left
+						anchors.right: parent.right
+
+						model: MusicPlayer.spotify.results
+						busy: MusicPlayer.spotify.searching && MusicPlayer.spotify.results.length === 0
+						message: MusicPlayer.spotify.resultsError.length > 0
+							? MusicPlayer.spotify.resultsError
+							: "Reading the songs…"
+
+						onActivated: (index, item) => MusicPlayer.playSpotifyResult(index)
+					}
 				}
 
 				// The built-in player without search: a shelf of playlists to tap, links the
@@ -1173,7 +1326,7 @@ Item
 					anchors.right: parent.right
 
 					visible: MusicPlayer.spotify.connected && !MusicPlayer.spotify.canSearch
-						&& !rootPanel.addingSpotifyLink
+						&& !rootPanel.addingSpotifyLink && MusicPlayer.spotify.openedUri.length === 0
 
 					clip: true
 					boundsBehavior: Flickable.StopAtBounds
@@ -1302,7 +1455,9 @@ Item
 										return
 									}
 
-									rootPanel.spotifyPicked(shelfCell.modelData.uri)
+									// Opened first, so the songs can be seen and one picked;
+									// "Play all" is one tap away at the top of the list.
+									MusicPlayer.spotify.openContext(shelfCell.modelData.uri, shelfCell.modelData.name)
 								}
 							}
 
@@ -1364,11 +1519,82 @@ Item
 						{
 							width: parent.width
 							visible: rootPanel.searchKeyOpen
-							text: "Spotify only allows search through a developer key. Create an app at developer.spotify.com/dashboard, add the redirect URI " + MusicPlayer.spotify.redirectUri + ", paste its Client ID here, then sign in. The music still plays here."
-							textFormat: Text.PlainText
-							color: Qt.rgba(1, 1, 1, 0.6)
-							font.pixelSize: 11
+							text: "Spotify only allows search through a free developer key of your own. It takes about two minutes; the music keeps playing here."
+							color: Qt.rgba(1, 1, 1, 0.75)
+							font.pixelSize: 12
 							wrapMode: Text.WordWrap
+						}
+
+						// The steps, each with a button for the part that can be clicked or
+						// copied, so nothing has to be typed out by hand.
+						Repeater
+						{
+							model: rootPanel.searchKeyOpen ? [
+								{ text: "1. Open Spotify's developer page and log in with your Spotify account.",
+									button: "Open", action: "open" },
+								{ text: "2. Create an app. Name it Pomodoro; any description will do.",
+									button: "Copy name", action: "name" },
+								{ text: "3. Under Redirect URIs, paste this and press Add: " + MusicPlayer.spotify.redirectUri,
+									button: "Copy", action: "redirect" },
+								{ text: "4. Tick Web API, accept the terms and Save.", button: "", action: "" },
+								{ text: "5. Open the app's Settings, copy its Client ID, paste it below and press Enter.",
+									button: "", action: "" }
+							] : []
+
+							delegate: Item
+							{
+								id: stepRow
+
+								required property var modelData
+
+								width: parent.width
+								height: Math.max(stepText.implicitHeight, 28)
+
+								Text
+								{
+									id: stepText
+
+									anchors.left: parent.left
+									anchors.right: stepButton.visible ? stepButton.left : parent.right
+									anchors.rightMargin: 8
+									anchors.verticalCenter: parent.verticalCenter
+
+									text: stepRow.modelData.text
+									textFormat: Text.PlainText
+									color: "white"
+									font.pixelSize: 12
+									wrapMode: Text.WrapAnywhere
+								}
+
+								Chip
+								{
+									id: stepButton
+
+									anchors.right: parent.right
+									anchors.verticalCenter: parent.verticalCenter
+
+									visible: stepRow.modelData.button.length > 0
+									label: stepRow.modelData.button
+
+									onClicked:
+									{
+										switch (stepRow.modelData.action)
+										{
+											case "open":
+												Qt.openUrlExternally("https://developer.spotify.com/dashboard/create")
+												break
+											case "name":
+												rootPanel.copy("Pomodoro")
+												stepButton.label = "Copied"
+												break
+											case "redirect":
+												rootPanel.copy(MusicPlayer.spotify.redirectUri)
+												stepButton.label = "Copied"
+												break
+										}
+									}
+								}
+							}
 						}
 
 						SearchField
@@ -1572,6 +1798,35 @@ Item
 			case "spotify": return "assets/icons/spotify.svg"
 			default: return "assets/icons/radio.svg"
 		}
+	}
+
+	// 83000 ms -> "1:23"; an hour or more -> "1:02:03".
+	function clock(milliseconds)
+	{
+		let total = Math.max(0, Math.floor(milliseconds / 1000))
+		let hours = Math.floor(total / 3600)
+		let minutes = Math.floor((total % 3600) / 60)
+		let seconds = total % 60
+		let padded = (n) => n < 10 ? "0" + n : "" + n
+
+		return hours > 0
+			? hours + ":" + padded(minutes) + ":" + padded(seconds)
+			: minutes + ":" + padded(seconds)
+	}
+
+	// Puts text on the clipboard, for the developer-key steps.
+	function copy(text)
+	{
+		copyHelper.text = text
+		copyHelper.selectAll()
+		copyHelper.copy()
+		copyHelper.deselect()
+	}
+
+	TextEdit
+	{
+		id: copyHelper
+		visible: false
 	}
 
 	function lookUpSpotifyLink(text)

@@ -73,6 +73,12 @@ class MusicPlayer : public QObject
 	// between stations in QML, so it is not counted here.
 	Q_PROPERTY(bool canSkip READ canSkip NOTIFY queueChanged)
 
+	// Where in the song or video playback is, and how long it is, in milliseconds, for
+	// the timeline. seekable is false for radio and live streams, which have no length.
+	Q_PROPERTY(qint64 position READ position NOTIFY positionChanged)
+	Q_PROPERTY(qint64 duration READ duration NOTIFY positionChanged)
+	Q_PROPERTY(bool seekable READ seekable NOTIFY positionChanged)
+
 	// What the stream says is on. Empty until it has said anything.
 	Q_PROPERTY(QString stationName READ stationName NOTIFY nowPlayingChanged)
 	Q_PROPERTY(QString genre READ genre NOTIFY nowPlayingChanged)
@@ -132,6 +138,13 @@ class MusicPlayer : public QObject
 		// Drops the music to a murmur for the given time, so the alarm is heard over it.
 		Q_INVOKABLE void	duck(int milliseconds);
 
+		qint64	position() const;
+		qint64	duration() const;
+		bool	seekable() const;
+
+		// Jumps to a point in the song or video. Does nothing when not seekable.
+		Q_INVOKABLE void	seek(qint64 milliseconds);
+
 		void	setSource(const QString &source);
 		void	setVolume(qreal volume);
 
@@ -149,6 +162,7 @@ class MusicPlayer : public QObject
 		void	statusChanged();
 		void	nowPlayingChanged();
 		void	queueChanged();
+		void	positionChanged();
 
 		// The YouTube queue moved to another video. Main.qml records it as the YouTube
 		// choice so the app comes back to it next time.
@@ -195,6 +209,10 @@ class MusicPlayer : public QObject
 		// dropped request without tearing a healthy stream down.
 		static constexpr int	ProbeFailuresForDrop = 2;
 
+		// The timeline moves in quarter seconds: smooth enough for a bar a few hundred
+		// pixels wide, and a quarter of the redraws of a per-frame update.
+		static constexpr int	PositionTickMs = 250;
+
 		// How loud the music stays, as a share of its volume, while it is ducked.
 		static constexpr qreal	DuckLevel = 0.15;
 
@@ -208,6 +226,10 @@ class MusicPlayer : public QObject
 		QTimer			_watchdog;
 		QTimer			_retryTimer;
 		QTimer			_duckTimer;
+
+		// Ticks the timeline along while something plays; stopped otherwise, so an idle
+		// app redraws nothing.
+		QTimer			_positionTimer;
 
 		StreamMetadata	_metadata;
 		MediaControls	*_controls = nullptr;

@@ -3,6 +3,7 @@
 
 #include <QByteArray>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QObject>
@@ -83,6 +84,11 @@ class SpotifyClient : public QObject
 	Q_PROPERTY(bool searching READ searching NOTIFY resultsChanged)
 	Q_PROPERTY(QString resultsError READ resultsError NOTIFY resultsChanged)
 
+	// A playlist, album or Liked Songs opened to show its songs: results then holds the
+	// songs, and openedUri/openedTitle say whose they are. Empty when nothing is open.
+	Q_PROPERTY(QString openedUri READ openedUri NOTIFY resultsChanged)
+	Q_PROPERTY(QString openedTitle READ openedTitle NOTIFY resultsChanged)
+
 	// The cover of what is playing now, for the panel.
 	Q_PROPERTY(QString artUrl READ artUrl NOTIFY nowPlayingChanged)
 
@@ -104,6 +110,15 @@ class SpotifyClient : public QObject
 		QString	artist() const;
 		bool	isPlaying() const;
 		QString	artUrl() const;
+
+		// Where in the current song playback is, and its length, in milliseconds. The
+		// position is the last one read plus the time since, while playing.
+		qint64	positionMs() const;
+		qint64	durationMs() const;
+		void	seek(qint64 milliseconds);
+
+		QString	openedUri() const;
+		QString	openedTitle() const;
 
 		bool			needsReconnect() const;
 		QVariantList	results() const;
@@ -138,6 +153,13 @@ class SpotifyClient : public QObject
 		// Names a pasted Spotify link through the public oEmbed endpoint, which needs no
 		// sign-in. Answers with linkLookedUp.
 		Q_INVOKABLE void	lookUpLink(const QString &text);
+
+		// Lists the songs of a playlist, album or Liked Songs in results (built-in player
+		// only; it reads them without the Web API). closeContext() puts back what was
+		// listed before; playOpened() plays the whole list from the top.
+		Q_INVOKABLE void	openContext(const QString &uri, const QString &title);
+		Q_INVOKABLE void	closeContext();
+		Q_INVOKABLE void	playOpened();
 
 	public slots:
 		void	connectAccount();
@@ -179,6 +201,11 @@ class SpotifyClient : public QObject
 		// Songs queued after the one tapped in a list.
 		static constexpr int		MaximumQueued = 30;
 
+		// The player lists a playlist in the background; asked again this often, this
+		// many times, while it fills in names and covers.
+		static constexpr int		ContextPollMs = 600;
+		static constexpr int		ContextPollAttempts = 25;
+
 		QNetworkAccessManager	_network;
 		SpotifyEngine			_engine;
 		QTcpServer				_callbackServer;
@@ -203,6 +230,15 @@ class SpotifyClient : public QObject
 		QString	_artUrl;
 		bool	_isPlaying = false;
 
+		qint64			_positionMs = 0;
+		qint64			_durationMs = 0;
+		QElapsedTimer	_positionClock;
+
+		QString			_openedUri;
+		QString			_openedTitle;
+		QVariantList	_resultsBeforeOpening;
+		QString			_errorBeforeOpening;
+
 		QString			_grantedScopes;
 		QVariantList	_results;
 		bool			_searching = false;
@@ -224,6 +260,7 @@ class SpotifyClient : public QObject
 		void	playerCommand(const QString &path, const QJsonObject &body, bool startsPlayback);
 		void	playerQueue(QStringList uris);
 		void	playerPoll();
+		void	fetchContext(const QString &uri, int generation, int attempt);
 		void	fetchResults(const QString &path, std::function<QVariantList(const QJsonObject &)> parse);
 		void	finishConnecting(const QString &error);
 		void	startWebSignIn();
