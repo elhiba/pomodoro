@@ -126,6 +126,16 @@ QString	SpotifyEngine::errorText() const
 	return _errorText;
 }
 
+const QString	SpotifyEngine::PremiumRequiredText = QStringLiteral(
+	"Spotify only plays in other apps for Premium accounts, so this account cannot play "
+	"here. Spotify Free works only in Spotify's own app. YouTube and the radio in this panel "
+	"work for everyone.");
+
+bool	SpotifyEngine::premiumRequired() const
+{
+	return _premiumRequired;
+}
+
 // In a folder of its own beside the executable, with the decoding libraries it needs.
 // Not in the executable's folder: those libraries share file names with the ones Qt's
 // FFmpeg brings, built against a different C runtime, and Windows would hand the
@@ -173,6 +183,10 @@ void	SpotifyEngine::signOut()
 	_username.clear();
 	_deviceId.clear();
 	_signInUrl.clear();
+
+	// The next account may well be a Premium one.
+	_premiumRequired = false;
+	_refusedInARow = 0;
 
 	setState(available() ? Stopped : Missing);
 	release();
@@ -414,6 +428,23 @@ void	SpotifyEngine::onOutput()
 			continue;
 		}
 
+		// A free account. Either Spotify turns the sign-in itself down...
+		if (line.contains(QLatin1String("PremiumAccountRequired")))
+		{
+			markPremiumRequired();
+			continue;
+		}
+
+		// ...or it signs in and then refuses the key for every song. One refusal is a song
+		// Spotify will not license here; a run of them with nothing played is the account.
+		if (line.contains(QLatin1String("refused the audio key")))
+		{
+			if (++_refusedInARow >= RefusalsForFreeAccount)
+				markPremiumRequired();
+		}
+		else if (line.contains(QLatin1String("msg=\"loaded ")))
+			_refusedInARow = 0;
+
 		// Problems are worth a line in the log. Never the whole output: it names the
 		// account.
 		if (line.contains(QLatin1String("level=error")) || line.contains(QLatin1String("level=fatal")))
@@ -436,8 +467,24 @@ void	SpotifyEngine::onFinished(int exitCode, QProcess::ExitStatus)
 	_statusTimer.stop();
 	_timeout.stop();
 
-	setState(Failed, QStringLiteral("The Spotify player stopped (code %1).").arg(exitCode));
+	setState(Failed, _premiumRequired
+		? PremiumRequiredText
+		: QStringLiteral("The Spotify player stopped (code %1).").arg(exitCode));
 	release();
+}
+
+void	SpotifyEngine::markPremiumRequired()
+{
+	if (_premiumRequired)
+		return;
+
+	_premiumRequired = true;
+	_errorText = PremiumRequiredText;
+
+	qInfo("pomodoro: spotify player: the account is not Premium");
+
+	emit stateChanged();
+	emit premiumRequiredFound();
 }
 
 void	SpotifyEngine::pollStatus()

@@ -58,6 +58,14 @@ class SpotifyEngine : public QObject
 		QString	deviceId() const;
 		QString	errorText() const;
 
+		// Spotify would not play for this account because it is not Premium: it turned
+		// the sign-in down as such, or refused every song asked for without playing one.
+		// Spotify only lets Premium accounts play in apps other than its own, ads or not,
+		// so there is nothing the app can do about it but say so.
+		bool	premiumRequired() const;
+
+		static const QString	PremiumRequiredText;
+
 		// Starts the player if needed and, once it asks for a sign-in, opens Spotify's
 		// page in the browser.
 		void	signIn();
@@ -82,6 +90,9 @@ class SpotifyEngine : public QObject
 	signals:
 		void	stateChanged();
 
+		// Emitted once, when premiumRequired() turns true.
+		void	premiumRequiredFound();
+
 	private:
 		static constexpr int	StatusPollMs = 1000;
 
@@ -90,6 +101,11 @@ class SpotifyEngine : public QObject
 
 		// How long a sign-in in the browser may take.
 		static constexpr int	SignInTimeoutMs = 300000;
+
+		// Songs refused in a row, with none played, before the account is taken for a free
+		// one. A Premium account can meet the odd song Spotify will not license; not three
+		// running with nothing playing in between.
+		static constexpr int	RefusalsForFreeAccount = 3;
 
 		QProcess				*_process = nullptr;
 		QNetworkAccessManager	_network;
@@ -102,6 +118,8 @@ class SpotifyEngine : public QObject
 		QString	_errorText;
 		QString	_signInUrl;
 		bool	_openSignIn = false;
+		bool	_premiumRequired = false;
+		int		_refusedInARow = 0;
 
 		// Whether go-librespot holds a stored login. Read from its own state.json rather
 		// than kept as a flag of ours: two records of one fact drifted apart once (the
@@ -116,6 +134,7 @@ class SpotifyEngine : public QObject
 		void	launch();
 		void	writeConfig();
 		void	onOutput();
+		void	markPremiumRequired();
 		void	onFinished(int exitCode, QProcess::ExitStatus exitStatus);
 		void	pollStatus();
 		void	setState(State state, const QString &error = QString());

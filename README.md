@@ -19,6 +19,16 @@ Built with C++17 and Qt 6 (Qt Quick / QML). One binary, no runtime dependencies 
 
 ## What's new
 
+### v1.5.0
+
+- **Tasks get a description and a to-do list.** Open a task with its arrow to write what
+  it is about and list the steps it needs; tick them off as you go. The task shows how
+  many steps are done, and so does the home screen for the task you are working on.
+- **Discord names and statuses with emoji or special letters** show properly: text is
+  never cut in the middle of an emoji, and on Windows emoji are drawn in colour.
+- **Spotify says when an account is not Premium** instead of loading for ever. Spotify
+  only lets Premium accounts play in other apps; on Spotify Free, use YouTube or the radio.
+
 ### v1.4.1
 
 - **Updates ask first.** When a new version is out, a banner says so; nothing is
@@ -63,8 +73,9 @@ Every release and its full notes: [Releases](../../releases).
   not counted down tick by tick. Change a session's length right on the home screen:
   `−`/`+` beside the digits, the mouse wheel over them, or click them and type.
 - **Task list** (optional) — note what you want to get done, pick the task you are
-  working on, and every focus session you finish counts towards it. The current task
-  shows under the timer. Turn it off in the settings if you do not want it.
+  working on, and every focus session you finish counts towards it. Each task can have a
+  description and a checklist of steps to tick off. The current task and its steps show
+  under the timer. Turn it off in the settings if you do not want it.
 - **Mini timer** — minimise the window and a small always-on-top timer takes its place,
   with the same digit animation as the main one; drag it anywhere, click it to come back.
   The minimised window can stay out of Alt+Tab.
@@ -78,7 +89,9 @@ Every release and its full notes: [Releases](../../releases).
   - **Spotify** — on Windows and Linux the release ships a built-in player, so Spotify
     plays inside Pomodoro: Liked Songs, picks, playlists and albums you paste, with a
     queue and a like button. Without it, Pomodoro remote-controls your own Spotify app.
-    Either way Spotify only allows it on Premium.
+    **Spotify Premium only:** Spotify does not let free accounts play in other apps, with
+    or without ads, and the app tells you so if the account is not Premium. On Spotify
+    Free, YouTube and the radio have the same music for everyone.
 
   A seek bar with a soft wave shows where you are in a song. Streams reconnect on their
   own if the connection drops, the music steps aside while the alarm plays, and it

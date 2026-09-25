@@ -1075,10 +1075,12 @@ Item
 					Text
 					{
 						width: parent.width
+						// Premium is said up front: Spotify Free does not play outside Spotify's
+						// own app, and finding that out after signing in is worse.
 						text: MusicPlayer.spotify.builtInPlayer
-							? "Sign in with your Spotify account to search your music and play it right here in Pomodoro. Spotify Premium is needed."
+							? "Sign in with your Spotify account to play your music right here in Pomodoro.\n\nSpotify Premium only: Spotify does not let free accounts play in other apps. On Spotify Free, YouTube and the radio work for everyone."
 							: MusicPlayer.spotify.clientId.length > 0
-							? "Sign in with your Spotify account to search your music and control it from here. It plays in your Spotify app, with Premium."
+							? "Sign in with your Spotify account to search your music and control it from here. It plays in your Spotify app.\n\nSpotify Premium only: Spotify does not let other apps control a free account."
 							: "Spotify sign-in is not switched on in this copy of Pomodoro yet."
 						color: "white"
 						font.pixelSize: 13

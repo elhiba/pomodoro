@@ -132,6 +132,12 @@ SpotifyClient::SpotifyClient(QObject *parent)
 	});
 	connect(&_pollTimer, &QTimer::timeout, this, &SpotifyClient::poll);
 
+	// Whatever was asked to play is not going to: say why instead of loading for ever.
+	connect(&_engine, &SpotifyEngine::premiumRequiredFound, this, [this]()
+	{
+		emit playbackFailed(SpotifyEngine::PremiumRequiredText);
+	});
+
 	connect(&_engine, &SpotifyEngine::stateChanged, this, [this]()
 	{
 		// Signed in: the account's display name comes from the Web API with the player's
@@ -221,6 +227,9 @@ QString	SpotifyClient::statusText() const
 			case SpotifyEngine::Failed:
 				return _engine.errorText();
 			case SpotifyEngine::Ready:
+				if (_engine.premiumRequired())
+					return SpotifyEngine::PremiumRequiredText;
+
 				return _accountName.isEmpty()
 					? QStringLiteral("Signed in to Spotify")
 					: QStringLiteral("Signed in to Spotify as %1").arg(_accountName);
