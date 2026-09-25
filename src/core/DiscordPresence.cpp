@@ -302,10 +302,18 @@ QJsonObject	DiscordPresence::activityJson()
 	if (!assets.isEmpty())
 		activity.insert(QStringLiteral("assets"), assets);
 
-	activity.insert(QStringLiteral("buttons"), QJsonArray{ QJsonObject{
-		{ QStringLiteral("label"), QStringLiteral("Get Pomodoro") },
-		{ QStringLiteral("url"), QStringLiteral("https://github.com/elhiba/pomodoro/releases/latest") }
-	} });
+	// What someone who opens the profile can click (Discord allows two, and does not show
+	// them to the user themself): the installer, and the open-source project.
+	activity.insert(QStringLiteral("buttons"), QJsonArray{
+		QJsonObject{
+			{ QStringLiteral("label"), QStringLiteral("Download Pomodoro") },
+			{ QStringLiteral("url"), QStringLiteral("https://github.com/elhiba/pomodoro/releases/latest") }
+		},
+		QJsonObject{
+			{ QStringLiteral("label"), QStringLiteral("View on GitHub") },
+			{ QStringLiteral("url"), QStringLiteral("https://github.com/elhiba/pomodoro") }
+		}
+	});
 
 	return activity;
 }
