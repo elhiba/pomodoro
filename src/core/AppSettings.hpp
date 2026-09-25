@@ -52,6 +52,10 @@ class AppSettings : public QObject
 	Q_PROPERTY(QString youtubeUrl READ youtubeUrl WRITE setYoutubeUrl NOTIFY youtubeUrlChanged)
 	Q_PROPERTY(QString spotifyUri READ spotifyUri WRITE setSpotifyUri NOTIFY spotifyUriChanged)
 	Q_PROPERTY(QString spotifyClientId READ spotifyClientId WRITE setSpotifyClientId NOTIFY spotifyClientIdChanged)
+	// The stations the user added to the radio list, as a JSON array of
+	// { name, note, url }. JSON rather than a QVariantList so the registry holds
+	// readable text instead of a serialised QVariant blob.
+	Q_PROPERTY(QString customStations READ customStations WRITE setCustomStations NOTIFY customStationsChanged)
 
 	// Handy for the settings panel, so the bounds live in one place instead of
 	// being repeated in QML.
@@ -91,8 +95,8 @@ class AppSettings : public QObject
 		static const QString	&defaultStreamUrl();
 		static const QString	&defaultYoutubeUrl();
 
-		// "radio", "youtube", "spotify", "custom": which of the music settings below is
-		// the one playing. The custom link is streamUrl, kept under its old name.
+		// "radio", "youtube", "spotify": which of the music settings below is the one
+		// playing. "custom" was a fourth once; load() turns it into a saved station.
 		static const QStringList	&musicSources();
 
 		explicit AppSettings(QObject *parent = nullptr);
@@ -119,6 +123,7 @@ class AppSettings : public QObject
 		QString	youtubeUrl() const;
 		QString	spotifyUri() const;
 		QString	spotifyClientId() const;
+		QString	customStations() const;
 
 		int		minimumMinutes() const;
 		int		maximumMinutes() const;
@@ -146,6 +151,7 @@ class AppSettings : public QObject
 		void	setYoutubeUrl(const QString &url);
 		void	setSpotifyUri(const QString &url);
 		void	setSpotifyClientId(const QString &url);
+		void	setCustomStations(const QString &value);
 
 	public slots:
 		void	restoreDefaults();
@@ -172,6 +178,7 @@ class AppSettings : public QObject
 		void	youtubeUrlChanged();
 		void	spotifyUriChanged();
 		void	spotifyClientIdChanged();
+		void	customStationsChanged();
 
 	private:
 		QSettings	_store;
@@ -198,6 +205,7 @@ class AppSettings : public QObject
 		QString	_youtubeUrl;
 		QString	_spotifyUri;
 		QString	_spotifyClientId;
+		QString	_customStations;
 
 		void	load();
 		void	store(const char *key, const QVariant &value);

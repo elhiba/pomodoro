@@ -9,9 +9,9 @@ import Pomodoro
 // The music panel: a small window inside the app, opened from the title bar, for picking
 // and controlling what plays without going through the settings.
 //
-// On top: the four sources as icons, then what is playing now -- cover, title, and
-// previous / play-pause / next. Below, the chosen source's own view: the station list,
-// YouTube search and playlists, the user's Spotify library and search, or the link field.
+// On top: the three sources as icons, then what is playing now -- cover, title, and
+// previous / play-pause / next. Below, the chosen source's own view: the station list
+// (with "+" to add one's own), YouTube search and playlists, or the Spotify library.
 Item
 {
 	id: rootPanel
@@ -24,8 +24,13 @@ Item
 	// Skip on the radio list is a change of station, which only Main.qml can make.
 	signal skipRequested(int step)
 
+	// A checked link to keep on the radio list, and one of those to forget again.
+	signal stationAdded(string name, string note, string url)
+	signal stationRemoved(string url)
+
 	readonly property bool typing: youtubeSearch.activeFocus || spotifySearch.activeFocus
-		|| linkField.activeFocus || clientIdField.activeFocus
+		|| stationLinkField.activeFocus || stationNameField.activeFocus
+		|| clientIdField.activeFocus
 
 	readonly property string source: AppSettings.musicSource
 
@@ -409,14 +414,17 @@ Item
 				id: stationGrid
 
 				anchors.fill: parent
-				visible: rootPanel.source === "radio"
+				visible: rootPanel.source === "radio" && !rootPanel.addingStation
 
 				clip: true
 				boundsBehavior: Flickable.StopAtBounds
-				cellWidth: width / 2
+
+				// A few pixels short of the full width so the scroll bar has its own lane.
+				cellWidth: (width - 8) / 2
 				cellHeight: 64
 
-				model: rootPanel.stations
+				// The last tile is "+", which opens the form to add a station.
+				model: rootPanel.stations.concat([{ add: true }])
 
 				ScrollBar.vertical: SlimScrollBar {}
 
@@ -427,7 +435,9 @@ Item
 					required property var modelData
 					required property int index
 
-					readonly property bool current: AppSettings.radioUrl === stationCell.modelData.url
+					readonly property bool adder: stationCell.modelData.add === true
+					readonly property bool current: !stationCell.adder
+						&& AppSettings.radioUrl === stationCell.modelData.url
 
 					width: stationGrid.cellWidth
 					height: stationGrid.cellHeight
@@ -442,12 +452,40 @@ Item
 							? Qt.rgba(1, 1, 1, 0.24)
 							: stationHover.hovered ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(1, 1, 1, 0.05)
 
-						border.color: stationCell.current ? Qt.rgba(1, 1, 1, 0.6) : "transparent"
+						border.color: stationCell.current ? Qt.rgba(1, 1, 1, 0.6)
+							: stationCell.adder ? Qt.rgba(1, 1, 1, 0.25) : "transparent"
 						border.width: 1
+
+						Row
+						{
+							anchors.centerIn: parent
+							spacing: 8
+							visible: stationCell.adder
+
+							Image
+							{
+								anchors.verticalCenter: parent.verticalCenter
+								width: 18
+								height: 18
+								source: "assets/icons/plus.svg"
+								sourceSize.width: 36
+								sourceSize.height: 36
+							}
+
+							Text
+							{
+								anchors.verticalCenter: parent.verticalCenter
+								text: "Add a station"
+								color: "white"
+								font.pixelSize: 13
+							}
+						}
 
 						Image
 						{
 							id: stationIcon
+
+							visible: !stationCell.adder
 
 							anchors.left: parent.left
 							anchors.leftMargin: 10
@@ -463,16 +501,18 @@ Item
 
 						Column
 						{
+							visible: !stationCell.adder
+
 							anchors.left: stationIcon.right
 							anchors.leftMargin: 10
 							anchors.right: parent.right
-							anchors.rightMargin: 8
+							anchors.rightMargin: stationCell.modelData.custom ? 26 : 8
 							anchors.verticalCenter: parent.verticalCenter
 
 							Text
 							{
 								width: parent.width
-								text: stationCell.modelData.name
+								text: stationCell.modelData.name || ""
 								color: "white"
 								font.pixelSize: 13
 								font.bold: stationCell.current
@@ -482,7 +522,7 @@ Item
 							Text
 							{
 								width: parent.width
-								text: stationCell.modelData.note
+								text: stationCell.modelData.note || ""
 								color: Qt.rgba(1, 1, 1, 0.55)
 								font.pixelSize: 11
 								elide: Text.ElideRight
@@ -500,11 +540,204 @@ Item
 						{
 							onTapped:
 							{
+								if (stationCell.adder)
+								{
+									rootPanel.addingStation = true
+									stationLinkField.forceActiveFocus()
+									return
+								}
+
 								AppSettings.radioUrl = stationCell.modelData.url
 
 								if (!MusicPlayer.active)
 									MusicPlayer.play()
 							}
+						}
+
+						// A station of one's own can be taken off the list again; the ones
+						// the app ships with cannot.
+						Button
+						{
+							id: removeStationBtn
+
+							anchors.right: parent.right
+							anchors.top: parent.top
+							anchors.rightMargin: 4
+							anchors.topMargin: 4
+
+							width: 22
+							height: 22
+
+							visible: stationCell.modelData.custom === true
+							opacity: stationHover.hovered || removeStationBtn.hovered ? 1.0 : 0.0
+
+							background: Rectangle
+							{
+								radius: 11
+								color: removeStationBtn.hovered ? Qt.rgba(1, 1, 1, 0.3) : Qt.rgba(1, 1, 1, 0.12)
+							}
+
+							icon.source: "assets/icons/close.svg"
+							icon.color: "white"
+							icon.width: 10
+							icon.height: 10
+
+							ToolTip.visible: removeStationBtn.hovered
+							ToolTip.delay: 500
+							ToolTip.text: "Remove this station"
+
+							onClicked:
+								rootPanel.stationRemoved(stationCell.modelData.url)
+						}
+					}
+				}
+			}
+
+			// Adding a station: paste a link, and it is checked straight away. The station's
+			// own name and description fill in; only a link that played audio can be saved.
+			Column
+			{
+				id: addStationForm
+
+				anchors.fill: parent
+				spacing: 10
+				visible: rootPanel.source === "radio" && rootPanel.addingStation
+
+				// The name typed by hand wins over the one the station announces.
+				property bool nameEdited: false
+
+				StationProbe
+				{
+					id: stationProbe
+
+					onChanged:
+						if (stationProbe.state === StationProbe.Valid && !addStationForm.nameEdited)
+							stationNameField.text = stationProbe.name
+				}
+
+				// Checked a moment after typing stops, so a link pasted in one go is
+				// checked once, and one typed by hand is not checked at every letter.
+				Timer
+				{
+					id: probeDelay
+					interval: 600
+					onTriggered: stationProbe.check(stationLinkField.text)
+				}
+
+				Text
+				{
+					width: parent.width
+					text: "Paste the link of an internet radio stream. It is checked before it can be saved."
+					color: Qt.rgba(1, 1, 1, 0.75)
+					font.pixelSize: 12
+					wrapMode: Text.WordWrap
+				}
+
+				SearchField
+				{
+					id: stationLinkField
+
+					width: parent.width
+					placeholderText: "https://…"
+					iconSource: "assets/icons/radio.svg"
+
+					onTextEdited: probeDelay.restart()
+					onSubmitted: (value) =>
+					{
+						probeDelay.stop()
+						stationProbe.check(value)
+					}
+				}
+
+				// What the check found, or why the link was refused.
+				Row
+				{
+					width: parent.width
+					spacing: 8
+					visible: stationProbe.state !== StationProbe.Empty
+
+					Rectangle
+					{
+						anchors.verticalCenter: parent.verticalCenter
+						width: 8
+						height: 8
+						radius: 4
+
+						color: stationProbe.state === StationProbe.Valid ? "#7ee07e"
+							: stationProbe.state === StationProbe.Invalid ? "#ff7b7b"
+							: Qt.rgba(1, 1, 1, 0.6)
+
+						SequentialAnimation on opacity
+						{
+							running: stationProbe.state === StationProbe.Checking
+							loops: Animation.Infinite
+							alwaysRunToEnd: true
+
+							NumberAnimation { to: 0.2; duration: 500 }
+							NumberAnimation { to: 1.0; duration: 500 }
+						}
+					}
+
+					Text
+					{
+						width: parent.width - 16
+						text: stationProbe.state === StationProbe.Checking ? "Checking the link…"
+							: stationProbe.state === StationProbe.Valid
+								? "It plays" + (stationProbe.note.length > 0 ? " · " + stationProbe.note : "")
+							: stationProbe.message
+						textFormat: Text.PlainText
+						color: stationProbe.state === StationProbe.Invalid ? "#ffb3b3" : Qt.rgba(1, 1, 1, 0.75)
+						font.pixelSize: 12
+						wrapMode: Text.WordWrap
+					}
+				}
+
+				SearchField
+				{
+					id: stationNameField
+
+					width: parent.width
+					visible: stationProbe.state === StationProbe.Valid
+					placeholderText: "Station name"
+					iconSource: "assets/icons/musicNote.svg"
+
+					onTextEdited: addStationForm.nameEdited = true
+					onSubmitted: saveStationBtn.clicked()
+				}
+
+				Row
+				{
+					anchors.right: parent.right
+					spacing: 8
+
+					Chip
+					{
+						label: "Cancel"
+						onClicked: rootPanel.closeStationForm()
+					}
+
+					Chip
+					{
+						id: saveStationBtn
+
+						readonly property bool alreadyThere: rootPanel.stations.some(
+							(station) => station.url === stationProbe.url)
+
+						label: saveStationBtn.alreadyThere ? "Already on the list" : "Save station"
+						selected: saveStationBtn.enabled
+						enabled: stationProbe.state === StationProbe.Valid
+							&& stationNameField.text.trim().length > 0
+							&& !saveStationBtn.alreadyThere
+						opacity: saveStationBtn.enabled ? 1.0 : 0.5
+
+						onClicked:
+						{
+							if (!saveStationBtn.enabled)
+								return
+
+							rootPanel.stationAdded(stationNameField.text.trim(), stationProbe.note,
+								stationProbe.url)
+							rootPanel.closeStationForm()
 						}
 					}
 				}
@@ -895,42 +1128,13 @@ Item
 				}
 			}
 
-			// Link: any stream of the user's own.
-			Column
-			{
-				anchors.fill: parent
-				spacing: 10
-				visible: rootPanel.source === "custom"
-
-				Text
-				{
-					width: parent.width
-					text: "Paste the address of any internet radio or audio stream (Icecast, Shoutcast, MP3 or AAC over HTTP), then press Enter."
-					color: Qt.rgba(1, 1, 1, 0.75)
-					font.pixelSize: 12
-					wrapMode: Text.WordWrap
-				}
-
-				SearchField
-				{
-					id: linkField
-
-					width: parent.width
-					text: AppSettings.streamUrl
-					placeholderText: "https://…"
-					iconSource: "assets/icons/plus.svg"
-
-					onSubmitted: (value) =>
-					{
-						AppSettings.streamUrl = value
-						MusicPlayer.play()
-					}
-				}
-			}
 		}
 	}
 
 	// ---------------------------------------------------------------- state and helpers
+
+	// True while the "add a station" form covers the station list.
+	property bool addingStation: false
 
 	property bool youtubePlaylists: false
 	property string youtubeQuery: ""
@@ -944,9 +1148,18 @@ Item
 		{
 			case "youtube": return "assets/icons/youtube.svg"
 			case "spotify": return "assets/icons/spotify.svg"
-			case "custom": return "assets/icons/plus.svg"
 			default: return "assets/icons/radio.svg"
 		}
+	}
+
+	function closeStationForm()
+	{
+		probeDelay.stop()
+		stationProbe.reset()
+		stationLinkField.text = ""
+		stationNameField.text = ""
+		addStationForm.nameEdited = false
+		rootPanel.addingStation = false
 	}
 
 	function searchYouTubeAgain()

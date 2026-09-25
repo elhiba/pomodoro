@@ -3,9 +3,9 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 
-// The four music sources as icons -- the station list, YouTube, Spotify, and "+" for a
-// link of the user's own -- with the current one ringed. Used by the music panel and the
-// settings drawer; it only reports the pick, the owner writes it.
+// The three music sources as icons -- the station list, YouTube and Spotify -- with the
+// current one ringed. A link of one's own is added to the station list with its "+"
+// tile rather than being a source of its own. Only reports the pick; the owner writes it.
 Row
 {
 	id: rootTabs
@@ -25,8 +25,7 @@ Row
 		model: [
 			{ key: "radio", icon: "assets/icons/radio.svg", label: "Lo-fi radio" },
 			{ key: "youtube", icon: "assets/icons/youtube.svg", label: "YouTube" },
-			{ key: "spotify", icon: "assets/icons/spotify.svg", label: "Spotify" },
-			{ key: "custom", icon: "assets/icons/plus.svg", label: "Your own stream link" }
+			{ key: "spotify", icon: "assets/icons/spotify.svg", label: "Spotify" }
 		]
 
 		delegate: Rectangle

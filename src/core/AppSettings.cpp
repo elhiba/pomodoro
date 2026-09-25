@@ -1,5 +1,9 @@
 #include "AppSettings.hpp"
 
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+
 namespace
 {
 	const char *const	KeyFocusMinutes = "timer/focusMinutes";
@@ -27,13 +31,13 @@ namespace
 	const char *const	KeyYoutubeUrl = "music/youtubeUrl";
 	const char *const	KeySpotifyUri = "music/spotifyUri";
 	const char *const	KeySpotifyClientId = "spotify/clientId";
+	const char *const	KeyCustomStations = "music/customStations";
 }
 
 const QStringList	&AppSettings::musicSources()
 {
 	static const QStringList	sources = {
-		QStringLiteral("radio"), QStringLiteral("youtube"),
-		QStringLiteral("spotify"), QStringLiteral("custom")
+		QStringLiteral("radio"), QStringLiteral("youtube"), QStringLiteral("spotify")
 	};
 
 	return sources;
@@ -170,6 +174,11 @@ QString	AppSettings::spotifyUri() const
 QString	AppSettings::spotifyClientId() const
 {
 	return _spotifyClientId;
+}
+
+QString	AppSettings::customStations() const
+{
+	return _customStations;
 }
 
 int	AppSettings::minimumMinutes() const
@@ -445,6 +454,17 @@ void	AppSettings::setSpotifyClientId(const QString &url)
 	emit spotifyClientIdChanged();
 }
 
+void	AppSettings::setCustomStations(const QString &value)
+{
+	if (_customStations == value)
+		return;
+
+	_customStations = value;
+	store(KeyCustomStations, value);
+
+	emit customStationsChanged();
+}
+
 void	AppSettings::restoreDefaults()
 {
 	setFocusMinutes(DefaultFocusMinutes);
@@ -506,12 +526,47 @@ void	AppSettings::load()
 
 	_musicSource = _store.value(KeyMusicSource, legacySource).toString();
 
-	if (!musicSources().contains(_musicSource))
-		_musicSource = QStringLiteral("radio");
 	_radioUrl = _store.value(KeyRadioUrl, defaultStreamUrl()).toString().trimmed();
 	_youtubeUrl = _store.value(KeyYoutubeUrl, defaultYoutubeUrl()).toString().trimmed();
 	_spotifyUri = _store.value(KeySpotifyUri, QStringLiteral("")).toString();
 	_spotifyClientId = _store.value(KeySpotifyClientId, QStringLiteral("")).toString();
+	_customStations = _store.value(KeyCustomStations, QStringLiteral("")).toString();
+
+	// "custom" used to be a source of its own, a single link beside the radio list. Links
+	// are stations now: whoever was on one finds it saved at the end of the list and
+	// playing from there, instead of losing it.
+	if (_musicSource == QLatin1String("custom"))
+	{
+		QJsonArray	stations = QJsonDocument::fromJson(_customStations.toUtf8()).array();
+		bool		known = false;
+
+		for (const QJsonValue &station : std::as_const(stations))
+			known = known || station.toObject().value(QStringLiteral("url")).toString() == _streamUrl;
+
+		if (!_streamUrl.isEmpty() && !known)
+		{
+			stations.append(QJsonObject {
+				{ QStringLiteral("name"), QStringLiteral("My stream") },
+				{ QStringLiteral("note"), QStringLiteral("Your own link") },
+				{ QStringLiteral("url"), _streamUrl }
+			});
+
+			_customStations = QString::fromUtf8(QJsonDocument(stations).toJson(QJsonDocument::Compact));
+			store(KeyCustomStations, _customStations);
+		}
+
+		if (!_streamUrl.isEmpty())
+		{
+			_radioUrl = _streamUrl;
+			store(KeyRadioUrl, _radioUrl);
+		}
+	}
+
+	if (!musicSources().contains(_musicSource))
+	{
+		_musicSource = QStringLiteral("radio");
+		store(KeyMusicSource, _musicSource);
+	}
 }
 
 void	AppSettings::store(const char *key, const QVariant &value)

@@ -142,8 +142,6 @@ Window
 				return AppSettings.youtubeUrl
 			case "spotify":
 				return AppSettings.spotifyUri.length > 0 ? AppSettings.spotifyUri : "spotify:"
-			case "custom":
-				return AppSettings.streamUrl
 			default:
 				return AppSettings.radioUrl
 		}
@@ -375,11 +373,13 @@ Window
 		stations: mainWindow.stations
 
 		onSkipRequested: (step) => mainWindow.skipMusic(step)
+		onStationAdded: (name, note, url) => mainWindow.addStation(name, note, url)
+		onStationRemoved: (url) => mainWindow.removeStation(url)
 	}
 
-	// The radio list, shared by the music panel and the settings. Every one was checked to
-	// answer with audio and an icy-name before it went in; the notes say what to expect.
-	readonly property var stations: [
+	// The radio list the app ships with. Every one was checked to answer with audio and an
+	// icy-name before it went in; the notes say what to expect.
+	readonly property var builtInStations: [
 		{ name: "Lofi Music", note: "Lo-fi beats · Zeno", url: "https://stream.zeno.fm/f3wvbbqmdg8uv" },
 		{ name: "Lofi Hip Hop Radio", note: "Lo-fi hip hop · Zeno", url: "https://stream.zeno.fm/0r0xa792kwzuv" },
 		{ name: "Lofi", note: "Lo-fi · laut.fm", url: "https://stream.laut.fm/lofi" },
@@ -390,6 +390,56 @@ Window
 		{ name: "Deep Space One", note: "Deep ambient · SomaFM", url: "https://ice1.somafm.com/deepspaceone-128-mp3" },
 		{ name: "Drone Zone", note: "Ambient, no beats · SomaFM", url: "https://ice1.somafm.com/dronezone-128-mp3" }
 	]
+
+	// The stations the user added, which only get in once StationProbe has heard audio
+	// from them. Stored as JSON; anything unreadable counts as none rather than breaking
+	// the list.
+	readonly property var customStations:
+	{
+		try
+		{
+			let saved = JSON.parse(AppSettings.customStations || "[]")
+
+			return Array.isArray(saved)
+				? saved.filter((station) => station && typeof station.url === "string")
+				: []
+		}
+		catch (error)
+		{
+			return []
+		}
+	}
+
+	// Both, in that order: what the music panel shows and what skip walks through.
+	readonly property var stations: mainWindow.builtInStations.concat(
+		mainWindow.customStations.map((station) => ({
+			name: station.name, note: station.note || "", url: station.url, custom: true
+		})))
+
+	// A checked station joins the end of the list and starts playing: whoever just added
+	// it wants to hear it.
+	function addStation(name, note, url)
+	{
+		let saved = mainWindow.customStations.filter((station) => station.url !== url)
+
+		saved.push({ name: name, note: note, url: url })
+
+		AppSettings.customStations = JSON.stringify(saved)
+		AppSettings.radioUrl = url
+
+		if (!MusicPlayer.active)
+			MusicPlayer.play()
+	}
+
+	// Removing the station that is on moves to the first one, playing if it was.
+	function removeStation(url)
+	{
+		AppSettings.customStations = JSON.stringify(
+			mainWindow.customStations.filter((station) => station.url !== url))
+
+		if (AppSettings.radioUrl === url)
+			AppSettings.radioUrl = mainWindow.builtInStations[0].url
+	}
 
 	// Next and previous. On the radio list that is the next station, kept playing if it
 	// was; everywhere else MusicPlayer knows what to do.

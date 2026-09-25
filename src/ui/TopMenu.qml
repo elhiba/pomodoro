@@ -116,7 +116,7 @@ Rectangle
     }
 
 	// The one music button. It wears the logo of the source in use -- the station list,
-	// YouTube, Spotify, or "+" for a link of your own -- once music has been started, and
+	// YouTube or Spotify -- once music has been started, and
 	// a plain note before that. Clicking it opens the music panel, which is where play,
 	// pause, skip and the choice of source all live; one button instead of three keeps
 	// the title bar quiet.
@@ -158,7 +158,6 @@ Rectangle
 					{
 						case "youtube": return "assets/icons/youtube.svg"
 						case "spotify": return "assets/icons/spotify.svg"
-						case "custom": return "assets/icons/plus.svg"
 						default: return "assets/icons/radio.svg"
 					}
 				}
