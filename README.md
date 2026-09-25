@@ -6,9 +6,47 @@
 
 Built with C++17 and Qt 6 (Qt Quick / QML). One binary, no runtime dependencies beyond Qt.
 
+[![Latest release](https://img.shields.io/github/v/release/elhiba/pomodoro?label=version)](../../releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/elhiba/pomodoro/total)](../../releases)
+[![CI](https://github.com/elhiba/pomodoro/actions/workflows/ci.yml/badge.svg?branch=main)](../../actions/workflows/ci.yml)
+![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS-informational)
+
+**[⬇ Download the latest version](../../releases/latest)**
+
 ![Pomodoro](docs/screenshot.png)
 
 </div>
+
+## What's new
+
+### v1.4.0
+
+- **The app updates itself.** No button to press and no browser: a new release downloads
+  in the background, is checked against its published SHA-256 checksum, and installs as
+  soon as the timer is stopped — never in the middle of a session — then the app reopens.
+  It works for every download: the Windows installer, the portable zip, the AppImage and
+  the macOS app. Pomodoro also looks for updates every six hours while it runs, not only
+  at start-up. (Coming from v1.3.0 or older, install this one update by hand; every
+  update after it is automatic.)
+- **Spotify plays on Linux.** The AppImage brings the sound library the built-in player
+  needs and uses PulseAudio or PipeWire, so it no longer stays silent.
+- **Discord from Flatpak or Snap** is found on Linux, so the Discord status works there too.
+
+### v1.3.0
+
+- Music panel: radio, YouTube and Spotify in one place, with search, playlists, skip and a
+  seek bar with a soft wave. Add your own radio stations.
+- Spotify plays inside the app with a built-in player (Windows and Linux), with Liked
+  Songs, "play next" and a heart to like a song.
+- Discord status showing what the timer is doing.
+- Colours for each session, animated digits (rolling, flip, soft) and a font for the
+  whole app; settings folded into sections.
+- Music follows your default audio output, lowers itself for the alarm, and shows its
+  cover plus next / previous in the system's media controls.
+- An optional task list, a floating mini timer while minimised, session length set right
+  on the home screen, and updates offered from inside the app.
+
+Every release and its full notes: [Releases](../../releases).
 
 ## Features
 
@@ -20,27 +58,40 @@ Built with C++17 and Qt 6 (Qt Quick / QML). One binary, no runtime dependencies 
 - **Task list** (optional) — note what you want to get done, pick the task you are
   working on, and every focus session you finish counts towards it. The current task
   shows under the timer. Turn it off in the settings if you do not want it.
-- **Mini timer** — minimise the window and a small always-on-top timer takes its place;
-  drag it anywhere, click it to come back.
-- **Music while you work**, from the source you prefer:
-  - **Radio** — a built-in list of lo-fi and ambient stations;
-  - **YouTube** — any video, mix or live stream, played as audio through
-    [yt-dlp](https://github.com/yt-dlp/yt-dlp) (the app offers to download it for you);
-  - **Spotify** — connect your account and Pomodoro plays, pauses and shows what is on in
-    your own Spotify app (Spotify allows this on Premium only);
-  - **Link** — any Icecast, Shoutcast or HTTP audio stream.
+- **Mini timer** — minimise the window and a small always-on-top timer takes its place,
+  with the same digit animation as the main one; drag it anywhere, click it to come back.
+  The minimised window can stay out of Alt+Tab.
+- **Music while you work**, from its own panel, with the source you prefer:
+  - **Radio** — a built-in list of lo-fi and ambient stations, plus your own: paste an
+    Icecast, Shoutcast or HTTP stream (or an `.m3u` / `.pls`) and the app checks that it
+    really plays audio and names it before it joins the list;
+  - **YouTube** — search for videos and playlists, or paste any video, mix or live stream,
+    played as audio through [yt-dlp](https://github.com/yt-dlp/yt-dlp) (the app offers to
+    download it for you and keeps it up to date);
+  - **Spotify** — on Windows and Linux the release ships a built-in player, so Spotify
+    plays inside Pomodoro: Liked Songs, picks, playlists and albums you paste, with a
+    queue and a like button. Without it, Pomodoro remote-controls your own Spotify app.
+    Either way Spotify only allows it on Premium.
 
-  Streams reconnect on their own with exponential backoff if the connection drops, and
-  the station and current track are shown next to the play button.
-- **OS media controls** — the stream shows up as a real media source in the system:
-  Windows **System Media Transport Controls**, **MPRIS** on Linux (GNOME, KDE,
-  `playerctl`), and the **Now Playing** centre on macOS. Play, pause and the keyboard's
-  media keys all work.
+  A seek bar with a soft wave shows where you are in a song. Streams reconnect on their
+  own if the connection drops, the music steps aside while the alarm plays, and it
+  follows your default audio output, so plugging in headphones just works.
+- **OS media controls** — the music shows up as a real media source in the system, with
+  its cover art: Windows **System Media Transport Controls**, **MPRIS** on Linux (GNOME,
+  KDE, `playerctl`), and the **Now Playing** centre on macOS. Play, pause, next, previous
+  and the keyboard's media keys all work.
+- **Discord status** (optional) — while Discord is open, your profile shows what the timer
+  is doing, how long is left, and the music if you want it. Nothing to sign in to.
 - **Session statistics** — focus minutes and pomodoros today, focus time over the last
   seven days, an all-time total, a daily streak and a seven-day chart. Stored locally.
-- **Desktop notifications** — a notification and an alarm sound when a session ends.
+- **Alarm and notifications** — an alarm with its own volume when a session ends, plus a
+  desktop notification on Linux.
+- **Your look** — a colour for each kind of session, how the digits change (still,
+  rolling, flip or soft), and any installed font for the whole app.
 - **System tray** — close hides the app to the tray with the timer still running; the
   tray menu and icon bring it back. A single instance is enforced.
+- **Updates itself** — new releases download and install on their own, never in the
+  middle of a session (see [Updates](#updates)).
 - **Custom frameless window** — a compact, resizable landscape layout with a colour that
   follows the current mode.
 
@@ -62,7 +113,9 @@ with its icon, by typing its name. On Linux the AppImage writes a desktop entry 
 `~/.local/share/applications` the first time it runs, so it is searchable without being
 unpacked anywhere; delete that file to remove it.
 
-**Updates** install themselves. The app checks for a new release when it starts and
+### Updates
+
+Updates install themselves. The app checks for a new release when it starts and
 every six hours after that; when one exists it downloads it in the background, checks it
 against the SHA-256 checksum GitHub publishes for it, and installs it as soon as the timer
 is stopped — a running or paused session is never interrupted — then reopens. Quitting
@@ -171,8 +224,9 @@ ctest --test-dir build --output-on-failure
 
 ### Releasing
 
-Continuous integration builds and tests every push on Linux, Windows and macOS. Pushing
-a version tag builds the packages and publishes them on a GitHub Release:
+Continuous integration builds and tests every push to `main` and every pull request on
+Linux, Windows and macOS. Pushing a version tag builds the packages and publishes them on
+a GitHub Release, which every installed copy then picks up and installs by itself:
 
 ```bash
 git tag v1.2.3
@@ -185,6 +239,8 @@ number to edit in the source before tagging.
 ## Tech stack
 
 C++17 · Qt 6 (Qt Quick / QML, Multimedia, Network, DBus, Widgets) · CMake · GitHub Actions.
+Music through yt-dlp and go-librespot, both fetched and checked against published SHA-256
+checksums.
 
 The UI is written in QML; all logic lives in C++ types exposed to QML. Platform
 integration is handled natively per OS — SMTC via the WinRT ABI on Windows, MPRIS over
