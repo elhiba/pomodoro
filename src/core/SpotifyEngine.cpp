@@ -8,6 +8,7 @@
 #include <QJsonDocument>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QProcessEnvironment>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSettings>
@@ -290,6 +291,18 @@ void	SpotifyEngine::launch()
 #endif
 
 #ifdef Q_OS_LINUX
+	// The player links against libasound just to start, even when it plays through
+	// PulseAudio, and many machines -- school ones where nothing can be installed, a
+	// fresh WSL -- have none: it then dies with "libasound.so.2: cannot open shared
+	// object file". The release ships one beside it, found first from here.
+	QProcessEnvironment	environment = QProcessEnvironment::systemEnvironment();
+	QString				libraries = QFileInfo(executablePath()).absolutePath();
+	QString				existing = environment.value(QStringLiteral("LD_LIBRARY_PATH"));
+
+	environment.insert(QStringLiteral("LD_LIBRARY_PATH"),
+		existing.isEmpty() ? libraries : libraries + QLatin1Char(':') + existing);
+	_process->setProcessEnvironment(environment);
+
 	// The same on Linux: the player is told to go when Pomodoro does.
 	_process->setChildProcessModifier([]()
 	{
@@ -352,6 +365,19 @@ void	SpotifyEngine::writeConfig()
 		"  enabled: true\n"
 		"  max_tracks: 500\n"
 		"log_level: info\n";
+
+#ifdef Q_OS_LINUX
+	// go-librespot defaults to ALSA on Linux, and on a desktop ALSA's "default" device is
+	// only wired to the real output when the pulse or pipewire ALSA plugin is installed
+	// and configured -- often not, and then Spotify signs in, plays, and nothing is heard.
+	// Its PulseAudio backend is a client of its own (no libpulse needed), and PipeWire
+	// answers it too, so it is used whenever a PulseAudio server is there to talk to.
+	QString	runtime = qEnvironmentVariable("XDG_RUNTIME_DIR");
+	bool	pulse = !qEnvironmentVariable("PULSE_SERVER").isEmpty()
+		|| (!runtime.isEmpty() && QFile::exists(runtime + QStringLiteral("/pulse/native")));
+
+	config += pulse ? "audio_backend: pulseaudio\n" : "audio_backend: alsa\n";
+#endif
 
 	file.write(config);
 	file.commit();

@@ -61,15 +61,20 @@ jobs:
       - name: Stage AppDir
         run: DESTDIR="$PWD/AppDir" cmake --install build
 
-      # Beside the executable, where SpotifyEngine looks. Its decoders are built in; it
-      # needs only ALSA, which every desktop has and AppImages leave to the system.
+      # Beside the executable, where SpotifyEngine looks. Its decoders are built in, but it
+      # will not start without libasound.so.2, which AppImages leave to the system and
+      # plenty of systems lack (checked in a fresh Ubuntu: "cannot open shared object
+      # file"). So one ships beside it; SpotifyEngine puts that folder on the player's
+      # LD_LIBRARY_PATH. The sound itself goes through PulseAudio/PipeWire, not ALSA.
       - name: Bundle the Spotify player
         run: |
+          sudo apt-get install -y --no-install-recommends libasound2
           curl -sSL -o go-librespot.tar.gz "https://github.com/devgianlu/go-librespot/releases/download/${GO_LIBRESPOT_VERSION}/go-librespot_linux_x86_64.tar.gz"
           echo "${GO_LIBRESPOT_SHA256_LINUX}  go-librespot.tar.gz" | sha256sum -c -
           mkdir -p AppDir/usr/bin/spotify
           tar -xzf go-librespot.tar.gz -C AppDir/usr/bin/spotify go-librespot
           chmod +x AppDir/usr/bin/spotify/go-librespot
+          cp -L /usr/lib/x86_64-linux-gnu/libasound.so.2 AppDir/usr/bin/spotify/libasound.so.2
 
       - name: Build AppImage
         env:
