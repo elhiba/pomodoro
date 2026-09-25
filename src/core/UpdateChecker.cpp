@@ -171,7 +171,7 @@ QString	UpdateChecker::statusText() const
 				.arg(_latestVersion)
 				.arg(qRound(_downloadProgress * 100));
 		case ReadyToInstall:
-			return QStringLiteral("Version %1 is ready and installs as soon as the timer is stopped")
+			return QStringLiteral("Version %1 is downloaded and installs as soon as the timer is stopped")
 				.arg(_latestVersion);
 		case Installing:
 			return QStringLiteral("Restarting into version %1…").arg(_latestVersion);
@@ -369,10 +369,6 @@ void	UpdateChecker::onCheckFinished()
 	pickAsset(object.value(QStringLiteral("assets")).toArray());
 
 	setStatus(updateAvailable() ? UpdateAvailable : UpToDate);
-
-	// No button to press: a newer release this copy can install is fetched right away.
-	if (updateAvailable() && canInstall())
-		installUpdate();
 }
 
 void	UpdateChecker::onDownloadReadyRead()

@@ -823,9 +823,8 @@ Item
 						wrapMode: Text.WordWrap
 					}
 
-					// Looks for a newer release. Updates download and install by themselves;
-					// once one is downloaded this restarts into it without waiting for the
-					// timer to be stopped.
+					// Looks for a newer release, downloads it when there is one, and once it is
+					// downloaded restarts into it without waiting for the timer to be stopped.
 					Button
 					{
 						id: updateBtn
@@ -866,7 +865,7 @@ Item
 									return "Restart into " + UpdateChecker.latestVersion
 
 								if (UpdateChecker.updateAvailable && UpdateChecker.canInstall)
-									return "Update to " + UpdateChecker.latestVersion
+									return "Download version " + UpdateChecker.latestVersion
 
 								return "Check for updates"
 							}

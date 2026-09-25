@@ -19,15 +19,22 @@ Built with C++17 and Qt 6 (Qt Quick / QML). One binary, no runtime dependencies 
 
 ## What's new
 
+### v1.4.1
+
+- **Updates ask first.** When a new version is out, a banner says so; nothing is
+  downloaded until you click **Download**. The download and the install then happen inside
+  the app, with a progress bar, and never in the middle of a session.
+- **Windows shows its real version.** v1.4.0 for Windows called itself 0.0.0 and kept
+  offering v1.4.0 as an update. Fixed in the release build, which now refuses to package
+  a version it cannot read.
+
 ### v1.4.0
 
-- **The app updates itself.** No button to press and no browser: a new release downloads
-  in the background, is checked against its published SHA-256 checksum, and installs as
-  soon as the timer is stopped — never in the middle of a session — then the app reopens.
-  It works for every download: the Windows installer, the portable zip, the AppImage and
-  the macOS app. Pomodoro also looks for updates every six hours while it runs, not only
-  at start-up. (Coming from v1.3.0 or older, install this one update by hand; every
-  update after it is automatic.)
+- **The app updates itself, inside the app, with no browser:** the new release is
+  checked against its published SHA-256 checksum and installed as soon as the timer is
+  stopped, then the app reopens. It works for every download: the Windows installer, the
+  portable zip, the AppImage and the macOS app. Pomodoro also looks for updates every six
+  hours while it runs, not only at start-up.
 - **Spotify plays on Linux.** The AppImage brings the sound library the built-in player
   needs and uses PulseAudio or PipeWire, so it no longer stays silent.
 - **Discord from Flatpak or Snap** is found on Linux, so the Discord status works there too.
@@ -90,8 +97,8 @@ Every release and its full notes: [Releases](../../releases).
   rolling, flip or soft), and any installed font for the whole app.
 - **System tray** — close hides the app to the tray with the timer still running; the
   tray menu and icon bring it back. A single instance is enforced.
-- **Updates itself** — new releases download and install on their own, never in the
-  middle of a session (see [Updates](#updates)).
+- **Updates inside the app** — a banner offers each new release; one click downloads and
+  installs it, never in the middle of a session (see [Updates](#updates)).
 - **Custom frameless window** — a compact, resizable landscape layout with a colour that
   follows the current mode.
 
@@ -115,15 +122,18 @@ unpacked anywhere; delete that file to remove it.
 
 ### Updates
 
-Updates install themselves. The app checks for a new release when it starts and
-every six hours after that; when one exists it downloads it in the background, checks it
-against the SHA-256 checksum GitHub publishes for it, and installs it as soon as the timer
-is stopped — a running or paused session is never interrupted — then reopens. Quitting
-with an update waiting installs it on the way out. Every download works this way: the
-Windows installer runs silently, the portable zip unpacks over its own folder, the
-AppImage replaces itself, and on macOS the app swaps its own bundle for the new one.
-Nothing opens a browser. Only builds from source and distribution packages, which the
-app did not install, leave updating to you.
+The app checks for a new release when it starts and every six hours after that. When
+one exists a banner at the bottom of the window says so — nothing is downloaded until
+you click **Download** (or **Later** to be asked again next time). The download runs
+inside the app with a progress bar, is checked against the SHA-256 checksum GitHub
+publishes for it, and is installed as soon as the timer is stopped — a running or paused
+session is never interrupted — then the app reopens. **Restart now** installs it without
+waiting, and quitting with an update downloaded installs it on the way out. Every
+download works this way: the Windows installer runs silently, the portable zip unpacks
+over its own folder, the AppImage replaces itself, and on macOS the app swaps its own
+bundle for the new one. Nothing opens a browser. Only builds from source and
+distribution packages, which the app did not install, leave updating to you.
+**Check for updates** is also under Settings → About.
 
 ### About the security warnings
 

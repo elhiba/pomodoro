@@ -899,8 +899,8 @@ Window
 
 	// Every launch asks GitHub whether there is something newer, a few seconds in so it
 	// never competes with the window coming up, and asks again every six hours for a copy
-	// that lives in the tray for days. A newer release downloads itself; nothing is shown
-	// unless there is one.
+	// that lives in the tray for days. Nothing is shown unless there is something newer,
+	// and nothing is downloaded until the banner's Download is clicked.
 	Timer
 	{
 		interval: 4000
@@ -920,8 +920,8 @@ Window
 			UpdateChecker.check()
 	}
 
-	// A downloaded update goes in by itself as soon as the timer is idle, so a running or
-	// paused session is never cut short. The pause gives a finished session's alarm time
+	// An update the user chose to download goes in as soon as the timer is idle, so a
+	// running or paused session is never cut short. The pause gives a finished session's alarm time
 	// to play, and lets an automatically started next session claim the timer first.
 	readonly property bool updateCanApply: UpdateChecker.readyToInstall
 		&& pomodoroTimer.state === PomodoroTimer.Idle
@@ -945,8 +945,8 @@ Window
 		}
 	}
 
-	// What the updater is doing, along the bottom of the home screen. "Later" puts it
-	// away for this run only; the update itself still goes ahead.
+	// The offer to update, along the bottom of the home screen, and then the download's
+	// progress. "Later" puts it away for this run only; the next launch asks again.
 	Rectangle
 	{
 		id: updateBanner
@@ -997,13 +997,15 @@ Window
 				width: Math.min(implicitWidth, mainWindow.width - 300)
 			}
 
-			// Only for when waiting is not wanted, or something went wrong: the update
-			// downloads and installs without it.
+			// Download starts the update inside the app; once it is downloaded the same
+			// button installs it without waiting for the timer to be stopped.
 			BannerButton
 			{
 				visible: !UpdateChecker.busy && UpdateChecker.canInstall
 				primary: true
-				label: UpdateChecker.status === UpdateChecker.Failed ? "Try again" : "Restart now"
+				label: UpdateChecker.status === UpdateChecker.Failed ? "Try again"
+					: UpdateChecker.readyToInstall ? "Restart now"
+					: "Download"
 
 				onClicked:
 				{

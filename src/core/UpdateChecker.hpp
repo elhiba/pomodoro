@@ -13,15 +13,15 @@
 class QNetworkReply;
 
 // Asks GitHub what the newest release is, and when it is newer than the running copy,
-// fetches it and puts it in place on its own -- nobody has to click anything, and
-// nothing is ever handed off to a browser.
+// offers it, and on the user's word fetches it and puts it in place -- all inside the
+// app, never by handing off to a browser.
 //
-// Main.qml runs check() shortly after every launch and every few hours after that. A
-// newer release is downloaded in the background straight away; once it is verified it
-// waits (ReadyToInstall) until the timer is idle, so a running or paused session is
-// never cut short, and Main.qml then calls applyUpdate(). Quitting with an update
-// waiting installs it on the way out. Installing depends on how this copy got onto the
-// machine:
+// Main.qml runs check() shortly after every launch and every few hours after that, and
+// a newer release is offered in a banner. Nothing is downloaded until the user clicks
+// Download (elhiba: ask first). Once the download is verified it waits (ReadyToInstall)
+// until the timer is idle, so a running or paused session is never cut short, and
+// Main.qml then calls applyUpdate(). Quitting with an update waiting installs it on the
+// way out. Installing depends on how this copy got onto the machine:
 //
 //   * Windows, installed by the Inno Setup installer: the new installer is run silently
 //     over the top, and relaunches the app when it is done;
@@ -85,7 +85,7 @@ class UpdateChecker : public QObject
 		void	check();
 
 		// Downloads and verifies the latest release when this copy knows how to replace
-		// itself. check() starts this by itself; it is public for "Try again".
+		// itself. Only ever started by the user: the Download button, or Try again.
 		void	installUpdate();
 
 		// Installs a downloaded, verified update and restarts into it.
