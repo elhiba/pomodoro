@@ -41,6 +41,10 @@ MediaControls	*MediaControls::create(QObject *parent)
 
 // MPRIS wants a file URL and macOS wants an image it can load, neither of which can be
 // a qrc path. The same trick Notifier uses: unpack the logo into the cache once.
+void	MediaControls::setArtwork(const QString &)
+{
+}
+
 QString	MediaControls::artworkPath()
 {
 	QString	directory = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);

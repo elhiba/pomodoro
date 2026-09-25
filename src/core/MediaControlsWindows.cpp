@@ -322,6 +322,19 @@ namespace
 				}
 			}
 
+			void	setArtwork(const QString &path) override
+			{
+				QString	wanted = path.isEmpty() ? artworkPath() : path;
+
+				if (wanted == _artwork)
+					return;
+
+				_artwork = wanted;
+
+				if (initialise())
+					requestThumbnail();
+			}
+
 			// Back on the Qt thread, with the opened file. Turns it into a stream
 			// reference, hands it to the updater and republishes so the flyout picks the
 			// picture up. Takes ownership of the reference it is handed.
@@ -365,6 +378,7 @@ namespace
 			PlaybackState	_state = Stopped;
 			QString			_title;
 			QString			_artist;
+			QString			_artwork = artworkPath();
 
 			ISystemMediaTransportControls				*_controls = nullptr;
 			ISystemMediaTransportControlsDisplayUpdater	*_updater = nullptr;
@@ -507,8 +521,9 @@ namespace
 				_controls->put_PlaybackStatus(status);
 			}
 
-			// The artwork shown beside the title. A stream carries no cover of its own --
-			// ICY metadata has no field for one -- so the app's own logo stands in.
+			// The artwork shown beside the title: the song's cover when MusicPlayer has one
+			// (setArtwork), else the app's logo -- a radio stream carries no cover of its own,
+			// ICY metadata has no field for one.
 			//
 			// put_Thumbnail needs an IRandomAccessStreamReference, and building one from a
 			// plain path goes through StorageFile, which is asynchronous. This only starts the
@@ -517,10 +532,19 @@ namespace
 			// fails on the first read, so the flyout ends up showing no picture at all.
 			void	requestThumbnail()
 			{
-				QString	path = QDir::toNativeSeparators(artworkPath());
+				QString	path = QDir::toNativeSeparators(_artwork);
 
 				if (path.isEmpty())
 					return;
+
+				// A newer picture replaces one still opening: the old handler is cut loose,
+				// so a slow earlier file can never land on top of the current one.
+				if (_fileHandler)
+				{
+					_fileHandler->detach();
+					_fileHandler->Release();
+					_fileHandler = nullptr;
+				}
 
 				ABI::Windows::Storage::IStorageFileStatics	*statics = nullptr;
 

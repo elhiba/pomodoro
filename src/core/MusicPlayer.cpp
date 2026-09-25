@@ -1,7 +1,11 @@
 #include "MusicPlayer.hpp"
 
 #include <QDebug>
+#include <QDir>
+#include <QFile>
 #include <QMediaMetaData>
+#include <QNetworkReply>
+#include <QStandardPaths>
 
 MusicPlayer::MusicPlayer(QObject *parent)
 	: QObject(parent)
@@ -14,6 +18,9 @@ MusicPlayer::MusicPlayer(QObject *parent)
 	_positionTimer.setInterval(PositionTickMs);
 
 	connect(&_positionTimer, &QTimer::timeout, this, &MusicPlayer::positionChanged);
+	connect(&_devices, &QMediaDevices::audioOutputsChanged, this, &MusicPlayer::followDefaultOutput);
+
+	_outputId = QMediaDevices::defaultAudioOutput().id();
 
 	rebuildPlayer();
 
@@ -868,7 +875,7 @@ void	MusicPlayer::rebuildPlayer()
 	if (_output)
 		_output->deleteLater();
 
-	_output = new QAudioOutput(this);
+	_output = new QAudioOutput(QMediaDevices::defaultAudioOutput(), this);
 	_output->setVolume(_ducked ? _volume * DuckLevel : _volume);
 
 	_player = new QMediaPlayer(this);
@@ -953,6 +960,66 @@ void	MusicPlayer::updateNowPlaying()
 	emit nowPlayingChanged();
 
 	updateControls();
+	updateArtwork();
+}
+
+void	MusicPlayer::followDefaultOutput()
+{
+	QAudioDevice	output = QMediaDevices::defaultAudioOutput();
+
+	// The list changes for devices that are not the default too; only a new default is
+	// worth the brief gap a switch costs.
+	if (output.id() == _outputId)
+		return;
+
+	_outputId = output.id();
+
+	_output->setDevice(output);
+	_spotify->reopenOutput();
+}
+
+void	MusicPlayer::updateArtwork()
+{
+	QString	url = artUrl();
+
+	if (url == _artShown)
+		return;
+
+	_artShown = url;
+
+	if (url.isEmpty())
+	{
+		_controls->setArtwork(QString());
+		return;
+	}
+
+	QNetworkReply	*reply = _artNetwork.get(QNetworkRequest(QUrl(url)));
+
+	connect(reply, &QNetworkReply::finished, this, [this, reply, url]()
+	{
+		reply->deleteLater();
+
+		// A newer song has come along meanwhile, or the download failed: leave it.
+		if (url != _artShown || reply->error() != QNetworkReply::NoError)
+			return;
+
+		QString	folder = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+
+		if (folder.isEmpty() || !QDir().mkpath(folder))
+			return;
+
+		_artFile = 1 - _artFile;
+
+		QFile	file(folder + QStringLiteral("/now-playing-%1.img").arg(_artFile));
+
+		if (!file.open(QIODevice::WriteOnly))
+			return;
+
+		file.write(reply->readAll());
+		file.close();
+
+		_controls->setArtwork(file.fileName());
+	});
 }
 
 void	MusicPlayer::updateControls()

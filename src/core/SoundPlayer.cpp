@@ -1,5 +1,6 @@
 #include "SoundPlayer.hpp"
 
+#include <QAudioDevice>
 #include <QDebug>
 #include <QUrl>
 
@@ -24,6 +25,20 @@ SoundPlayer::SoundPlayer(QObject *parent)
 	_click.setSource(QUrl(QLatin1String(ClickSource)));
 
 	applyVolume();
+
+	connect(&_devices, &QMediaDevices::audioOutputsChanged, this, &SoundPlayer::followDefaultOutput);
+	followDefaultOutput();
+}
+
+void	SoundPlayer::followDefaultOutput()
+{
+	QAudioDevice	output = QMediaDevices::defaultAudioOutput();
+
+	if (_alarm.audioDevice().id() == output.id())
+		return;
+
+	_alarm.setAudioDevice(output);
+	_click.setAudioDevice(output);
 }
 
 qreal	SoundPlayer::volume() const

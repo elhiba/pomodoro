@@ -156,6 +156,10 @@ class SpotifyClient : public QObject
 		// Reads back what is playing every few seconds, for the now-playing line.
 		void	setPolling(bool polling);
 
+		// Moves the built-in player to the system's current default output, keeping the
+		// song, position and volume.
+		void	reopenOutput();
+
 		// The built-in player's volume, 0 to 1. Does nothing for a remote-controlled
 		// Spotify, whose volume is its own.
 		void	setPlayerVolume(qreal volume);

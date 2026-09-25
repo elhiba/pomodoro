@@ -1,8 +1,11 @@
 #ifndef MUSIC_PLAYER_HPP
 #define MUSIC_PLAYER_HPP
 
+#include <QAudioDevice>
 #include <QAudioOutput>
+#include <QMediaDevices>
 #include <QMediaPlayer>
+#include <QNetworkAccessManager>
 #include <QNetworkInformation>
 #include <QObject>
 #include <QString>
@@ -237,6 +240,19 @@ class MusicPlayer : public QObject
 		// app redraws nothing.
 		QTimer			_positionTimer;
 
+		// Headphones plugged in, or the default output changed in Windows: the music
+		// follows the system's default output instead of staying on the old one until
+		// the app restarts.
+		QMediaDevices	_devices;
+		QByteArray		_outputId;
+
+		// The cover shown by the desktop's media panel: fetched once per picture into
+		// the cache folder, alternating between two files so the panel never reads one
+		// half written.
+		QNetworkAccessManager	_artNetwork;
+		QString					_artShown;
+		int						_artFile = 0;
+
 		StreamMetadata	_metadata;
 		MediaControls	*_controls = nullptr;
 		YtDlp			*_ytDlp = nullptr;
@@ -295,6 +311,8 @@ class MusicPlayer : public QObject
 		void	cancelRetry();
 		void	updateNowPlaying();
 		void	updateControls();
+		void	updateArtwork();
+		void	followDefaultOutput();
 
 		bool	networkLooksDown() const;
 		int		retryDelayMs() const;

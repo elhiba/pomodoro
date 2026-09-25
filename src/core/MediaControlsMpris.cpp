@@ -201,6 +201,22 @@ namespace Mpris
 				announce(changed);
 			}
 
+			void	setArtwork(const QString &path) override
+			{
+				QString	chosen = path.isEmpty() ? artworkPath() : path;
+				QString	url = chosen.isEmpty() ? QString() : QUrl::fromLocalFile(chosen).toString();
+
+				if (url == _artUrl)
+					return;
+
+				_artUrl = url;
+
+				QVariantMap	changed;
+
+				changed.insert(QStringLiteral("Metadata"), metadata());
+				announce(changed);
+			}
+
 			QString	playbackStatus() const
 			{
 				switch (_state)

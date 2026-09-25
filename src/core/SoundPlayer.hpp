@@ -2,6 +2,7 @@
 #define SOUND_PLAYER_HPP
 
 #include <QObject>
+#include <QMediaDevices>
 #include <QSoundEffect>
 
 #include <QtQml/qqmlregistration.h>
@@ -43,9 +44,13 @@ class SoundPlayer : public QObject
 		QSoundEffect	_alarm;
 		QSoundEffect	_click;
 
+		// The cues follow the system's default output, like the music does.
+		QMediaDevices	_devices;
+
 		qreal	_volume = 0.7;
 
 		void	applyVolume();
+		void	followDefaultOutput();
 };
 
 #endif

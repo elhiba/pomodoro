@@ -1007,6 +1007,16 @@ QString	SpotifyClient::toUri(const QString &text)
 	return QStringLiteral("spotify:%1:%2").arg(segments.at(0), segments.at(1));
 }
 
+void	SpotifyClient::reopenOutput()
+{
+	if (!_engine.ready())
+		return;
+
+	// An empty device means "the default", looked up again as it is opened.
+	_engine.call("POST", QStringLiteral("/player/output"), QJsonObject{ { QStringLiteral("device"), QString() } },
+		[](int, const QJsonObject &) {});
+}
+
 void	SpotifyClient::setPlayerVolume(qreal volume)
 {
 	if (!_engine.ready())

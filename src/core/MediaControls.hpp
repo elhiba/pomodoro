@@ -39,6 +39,11 @@ class MediaControls : public QObject
 		// a stream has no artist of its own to speak of.
 		virtual void	setNowPlaying(const QString &title, const QString &artist) = 0;
 
+		// The picture beside it: a local image file (the song's cover, downloaded by
+		// MusicPlayer), or empty for the app's logo. Platforms that cannot show one
+		// ignore it.
+		virtual void	setArtwork(const QString &path);
+
 	signals:
 		void	playRequested();
 		void	pauseRequested();
