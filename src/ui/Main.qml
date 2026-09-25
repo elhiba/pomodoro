@@ -318,6 +318,9 @@ Window
 
 		text: taskList.activeTitle.length > 0
 			? taskList.activeTitle + "  ·  " + taskList.activeCompleted + "/" + taskList.activeEstimate
+				+ (taskList.activeStepCount > 0
+					? "  ·  " + taskList.activeStepsDone + "/" + taskList.activeStepCount + " steps"
+					: "")
 			: taskList.openCount > 0 ? "Pick a task to work on" : "+ Add a task"
 
 		textFormat: Text.PlainText

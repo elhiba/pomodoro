@@ -11,7 +11,8 @@ import Pomodoro
 //
 // Type and press Enter to add. Click a task to work on it: the active task collects the
 // focus sessions that finish while it is picked, and shows under the timer. The circle
-// marks it done; hovering shows the estimate controls and the delete button.
+// marks it done; hovering shows the estimate controls and the delete button. The arrow
+// opens the task's description and its checklist of steps.
 Item
 {
 	id: rootPanel
@@ -21,8 +22,11 @@ Item
 	property bool open: false
 	property color themeColor: "#12130F"
 
-	// Single letter shortcuts have to stand down while a task is being typed.
+	// Single letter shortcuts have to stand down while a task is being typed -- in any of
+	// the drawer's fields, the descriptions and steps included.
 	readonly property bool typing: newTaskField.activeFocus || taskList.editing
+		|| (rootPanel.open && (rootPanel.Window.activeFocusItem instanceof TextInput
+			|| rootPanel.Window.activeFocusItem instanceof TextEdit))
 
 	Rectangle
 	{
@@ -203,14 +207,24 @@ Item
 				required property int estimate
 				required property int completed
 				required property bool active
+				required property string notes
+				required property var steps
+				required property int stepCount
+				required property int stepsDone
+
+				// Open to show the description and the steps.
+				property bool expanded: false
+
+				readonly property bool hasDetails: row.notes.length > 0 || row.stepCount > 0
 
 				width: ListView.view.width
-				height: 48
+				height: headerArea.height + (row.expanded ? details.implicitHeight + 10 : 0)
 				radius: 8
+				clip: true
 
 				color: row.active
 					? Qt.rgba(1, 1, 1, 0.2)
-					: rowHover.hovered ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+					: rowHover.hovered || row.expanded ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
 
 				border.color: row.active ? Qt.rgba(1, 1, 1, 0.55) : "transparent"
 				border.width: 1
@@ -220,188 +234,438 @@ Item
 					id: rowHover
 				}
 
-				// Clicking the row (anywhere the buttons are not) picks it to work on.
-				MouseArea
+				Item
 				{
-					anchors.fill: parent
+					id: headerArea
 
-					onClicked:
-						rootPanel.tasks.toggleActive(row.index)
+					width: parent.width
+					height: 48
 
-					onDoubleClicked:
-						titleEdit.begin()
-				}
-
-				// The done circle.
-				Rectangle
-				{
-					id: doneMark
-
-					anchors.left: parent.left
-					anchors.leftMargin: 10
-					anchors.verticalCenter: parent.verticalCenter
-
-					width: 20
-					height: 20
-					radius: 10
-
-					color: row.done ? "white" : "transparent"
-					border.color: "white"
-					border.width: 2
-					opacity: row.done ? 0.8 : 0.9
-
-					Text
-					{
-						anchors.centerIn: parent
-						visible: row.done
-						text: "✓"
-						color: rootPanel.themeColor
-						font.pixelSize: 13
-						font.bold: true
-					}
-
+					// Clicking the row (anywhere the buttons are not) picks it to work on.
 					MouseArea
 					{
 						anchors.fill: parent
-						anchors.margins: -6
-						cursorShape: Qt.PointingHandCursor
 
 						onClicked:
+							rootPanel.tasks.toggleActive(row.index)
+
+						onDoubleClicked:
+							titleEdit.begin()
+					}
+
+					// The done circle.
+					Rectangle
+					{
+						id: doneMark
+
+						anchors.left: parent.left
+						anchors.leftMargin: 10
+						anchors.verticalCenter: parent.verticalCenter
+
+						width: 20
+						height: 20
+						radius: 10
+
+						color: row.done ? "white" : "transparent"
+						border.color: "white"
+						border.width: 2
+						opacity: row.done ? 0.8 : 0.9
+
+						Text
 						{
-							SoundPlayer.playClick()
-							rootPanel.tasks.setDone(row.index, !row.done)
+							anchors.centerIn: parent
+							visible: row.done
+							text: "✓"
+							color: rootPanel.themeColor
+							font.pixelSize: 13
+							font.bold: true
+						}
+
+						MouseArea
+						{
+							anchors.fill: parent
+							anchors.margins: -6
+							cursorShape: Qt.PointingHandCursor
+
+							onClicked:
+							{
+								SoundPlayer.playClick()
+								rootPanel.tasks.setDone(row.index, !row.done)
+							}
+						}
+					}
+
+					// The title, and under it how far the steps have got.
+					Column
+					{
+						anchors.left: doneMark.right
+						anchors.leftMargin: 12
+						anchors.right: tally.left
+						anchors.rightMargin: 8
+						anchors.verticalCenter: parent.verticalCenter
+
+						visible: !titleEdit.visible
+
+						Text
+						{
+							width: parent.width
+
+							text: row.title
+							textFormat: Text.PlainText
+							color: "white"
+							opacity: row.done ? 0.5 : 1.0
+							font.pixelSize: 14
+							font.bold: row.active
+							font.strikeout: row.done
+							elide: Text.ElideRight
+						}
+
+						Text
+						{
+							width: parent.width
+							visible: row.stepCount > 0 || row.notes.length > 0
+
+							text: row.stepCount > 0
+								? row.stepsDone + " of " + row.stepCount + " steps done"
+								: "Has a description"
+							textFormat: Text.PlainText
+							color: "white"
+							opacity: 0.55
+							font.pixelSize: 11
+							elide: Text.ElideRight
+						}
+					}
+
+					TextField
+					{
+						id: titleEdit
+
+						anchors.left: doneMark.right
+						anchors.leftMargin: 8
+						anchors.right: tally.left
+						anchors.rightMargin: 8
+						anchors.verticalCenter: parent.verticalCenter
+
+						height: 34
+						visible: false
+
+						color: "white"
+						font.pixelSize: 14
+						maximumLength: 200
+
+						background: Rectangle
+						{
+							radius: 6
+							color: Qt.rgba(0, 0, 0, 0.25)
+							border.color: Qt.rgba(1, 1, 1, 0.5)
+							border.width: 1
+						}
+
+						function begin()
+						{
+							titleEdit.text = row.title
+							titleEdit.visible = true
+							taskList.editing = true
+							titleEdit.forceActiveFocus()
+							titleEdit.selectAll()
+						}
+
+						function finish(keep)
+						{
+							if (!titleEdit.visible)
+								return
+
+							titleEdit.visible = false
+							taskList.editing = false
+
+							if (keep)
+								rootPanel.tasks.rename(row.index, titleEdit.text)
+						}
+
+						onAccepted:
+							titleEdit.finish(true)
+
+						onActiveFocusChanged:
+							if (!titleEdit.activeFocus)
+								titleEdit.finish(true)
+
+						Keys.onEscapePressed:
+							titleEdit.finish(false)
+					}
+
+					// Sessions done out of sessions planned, with the controls to change the
+					// plan and to delete the task showing only while the row is hovered. The
+					// arrow opens the description and the steps; it stays in view once the
+					// task has either, so they are not hidden behind a hover.
+					Row
+					{
+						id: tally
+
+						anchors.right: parent.right
+						anchors.rightMargin: 8
+						anchors.verticalCenter: parent.verticalCenter
+
+						spacing: 2
+
+						SmallButton
+						{
+							visible: rowHover.hovered
+							label: "−"
+
+							onClicked:
+								rootPanel.tasks.setEstimate(row.index, row.estimate - 1)
+						}
+
+						Text
+						{
+							anchors.verticalCenter: parent.verticalCenter
+
+							width: 38
+							horizontalAlignment: Text.AlignHCenter
+
+							text: row.completed + "/" + row.estimate
+							color: "white"
+							opacity: 0.75
+							font.pixelSize: 13
+						}
+
+						SmallButton
+						{
+							visible: rowHover.hovered
+							label: "+"
+
+							onClicked:
+								rootPanel.tasks.setEstimate(row.index, row.estimate + 1)
+						}
+
+						SmallButton
+						{
+							visible: rowHover.hovered
+							label: "×"
+							danger: true
+
+							onClicked:
+								rootPanel.tasks.remove(row.index)
+						}
+
+						SmallButton
+						{
+							id: expandBtn
+
+							visible: rowHover.hovered || row.expanded || row.hasDetails
+							label: "›"
+							rotation: row.expanded ? 90 : 0
+
+							ToolTip.visible: expandBtn.hovered
+							ToolTip.delay: 500
+							ToolTip.text: row.expanded ? "Hide the details" : "Description and steps"
+
+							Behavior on rotation
+							{
+								NumberAnimation { duration: 150 }
+							}
+
+							onClicked:
+								row.expanded = !row.expanded
 						}
 					}
 				}
 
-				Text
+				// The description and the checklist, under the row while it is open.
+				Column
 				{
-					anchors.left: doneMark.right
-					anchors.leftMargin: 12
-					anchors.right: tally.left
-					anchors.rightMargin: 8
-					anchors.verticalCenter: parent.verticalCenter
+					id: details
 
-					visible: !titleEdit.visible
-
-					text: row.title
-					textFormat: Text.PlainText
-					color: "white"
-					opacity: row.done ? 0.5 : 1.0
-					font.pixelSize: 14
-					font.bold: row.active
-					font.strikeout: row.done
-					elide: Text.ElideRight
-				}
-
-				TextField
-				{
-					id: titleEdit
-
-					anchors.left: doneMark.right
-					anchors.leftMargin: 8
-					anchors.right: tally.left
-					anchors.rightMargin: 8
-					anchors.verticalCenter: parent.verticalCenter
-
-					height: 34
-					visible: false
-
-					color: "white"
-					font.pixelSize: 14
-					maximumLength: 200
-
-					background: Rectangle
-					{
-						radius: 6
-						color: Qt.rgba(0, 0, 0, 0.25)
-						border.color: Qt.rgba(1, 1, 1, 0.5)
-						border.width: 1
-					}
-
-					function begin()
-					{
-						titleEdit.text = row.title
-						titleEdit.visible = true
-						taskList.editing = true
-						titleEdit.forceActiveFocus()
-						titleEdit.selectAll()
-					}
-
-					function finish(keep)
-					{
-						if (!titleEdit.visible)
-							return
-
-						titleEdit.visible = false
-						taskList.editing = false
-
-						if (keep)
-							rootPanel.tasks.rename(row.index, titleEdit.text)
-					}
-
-					onAccepted:
-						titleEdit.finish(true)
-
-					onActiveFocusChanged:
-						if (!titleEdit.activeFocus)
-							titleEdit.finish(true)
-
-					Keys.onEscapePressed:
-						titleEdit.finish(false)
-				}
-
-				// Sessions done out of sessions planned, with the controls to change the
-				// plan and to delete the task showing only while the row is hovered.
-				Row
-				{
-					id: tally
-
+					anchors.top: headerArea.bottom
+					anchors.left: parent.left
 					anchors.right: parent.right
-					anchors.rightMargin: 8
-					anchors.verticalCenter: parent.verticalCenter
+					anchors.leftMargin: 12
+					anchors.rightMargin: 12
 
-					spacing: 2
+					visible: row.expanded
+					spacing: 6
 
-					SmallButton
+					TextArea
 					{
-						visible: rowHover.hovered
-						label: "−"
+						id: notesEdit
 
-						onClicked:
-							rootPanel.tasks.setEstimate(row.index, row.estimate - 1)
-					}
+						width: parent.width
 
-					Text
-					{
-						anchors.verticalCenter: parent.verticalCenter
-
-						width: 38
-						horizontalAlignment: Text.AlignHCenter
-
-						text: row.completed + "/" + row.estimate
+						text: row.notes
+						placeholderText: "Description: what this task is about"
+						placeholderTextColor: Qt.rgba(1, 1, 1, 0.4)
 						color: "white"
-						opacity: 0.75
 						font.pixelSize: 13
+						wrapMode: TextEdit.Wrap
+						selectByMouse: true
+
+						background: Rectangle
+						{
+							radius: 6
+							color: Qt.rgba(0, 0, 0, 0.2)
+							border.color: notesEdit.activeFocus ? Qt.rgba(1, 1, 1, 0.5) : Qt.rgba(1, 1, 1, 0.15)
+							border.width: 1
+						}
+
+						// Saved when the field is left, not on every key.
+						onActiveFocusChanged:
+							if (!notesEdit.activeFocus)
+								rootPanel.tasks.setNotes(row.index, notesEdit.text)
+
+						Keys.onEscapePressed:
+							notesEdit.focus = false
 					}
 
-					SmallButton
+					Repeater
 					{
-						visible: rowHover.hovered
-						label: "+"
+						model: row.steps
 
-						onClicked:
-							rootPanel.tasks.setEstimate(row.index, row.estimate + 1)
+						delegate: Item
+						{
+							id: stepRow
+
+							required property int index
+							required property var modelData
+
+							width: details.width
+							height: 30
+
+							HoverHandler
+							{
+								id: stepHover
+							}
+
+							Rectangle
+							{
+								id: stepMark
+
+								anchors.left: parent.left
+								anchors.leftMargin: 4
+								anchors.verticalCenter: parent.verticalCenter
+
+								width: 16
+								height: 16
+								radius: 4
+
+								color: stepRow.modelData.done ? "white" : "transparent"
+								border.color: "white"
+								border.width: 2
+								opacity: 0.85
+
+								Text
+								{
+									anchors.centerIn: parent
+									visible: stepRow.modelData.done
+									text: "✓"
+									color: rootPanel.themeColor
+									font.pixelSize: 11
+									font.bold: true
+								}
+
+								MouseArea
+								{
+									anchors.fill: parent
+									anchors.margins: -6
+									cursorShape: Qt.PointingHandCursor
+
+									onClicked:
+									{
+										SoundPlayer.playClick()
+										rootPanel.tasks.setStepDone(row.index, stepRow.index, !stepRow.modelData.done)
+									}
+								}
+							}
+
+							// Edited in place: the frame only shows while it has the focus.
+							TextField
+							{
+								id: stepEdit
+
+								anchors.left: stepMark.right
+								anchors.leftMargin: 6
+								anchors.right: removeStepBtn.left
+								anchors.rightMargin: 4
+								anchors.verticalCenter: parent.verticalCenter
+
+								height: 28
+								leftPadding: 6
+								rightPadding: 6
+
+								text: stepRow.modelData.text
+								color: "white"
+								opacity: stepRow.modelData.done && !stepEdit.activeFocus ? 0.5 : 1.0
+								font.pixelSize: 13
+								font.strikeout: stepRow.modelData.done && !stepEdit.activeFocus
+								maximumLength: 200
+								selectByMouse: true
+
+								background: Rectangle
+								{
+									radius: 5
+									color: stepEdit.activeFocus ? Qt.rgba(0, 0, 0, 0.25) : "transparent"
+									border.color: stepEdit.activeFocus ? Qt.rgba(1, 1, 1, 0.4) : "transparent"
+									border.width: 1
+								}
+
+								onAccepted:
+									stepEdit.focus = false
+
+								onActiveFocusChanged:
+									if (!stepEdit.activeFocus)
+										rootPanel.tasks.renameStep(row.index, stepRow.index, stepEdit.text)
+
+								Keys.onEscapePressed:
+								{
+									stepEdit.text = stepRow.modelData.text
+									stepEdit.focus = false
+								}
+							}
+
+							SmallButton
+							{
+								id: removeStepBtn
+
+								anchors.right: parent.right
+								anchors.verticalCenter: parent.verticalCenter
+
+								opacity: stepHover.hovered ? 1.0 : 0.0
+								label: "×"
+								danger: true
+
+								onClicked:
+									rootPanel.tasks.removeStep(row.index, stepRow.index)
+							}
+						}
 					}
 
-					SmallButton
+					TextField
 					{
-						visible: rowHover.hovered
-						label: "×"
-						danger: true
+						id: newStepField
 
-						onClicked:
-							rootPanel.tasks.remove(row.index)
+						width: parent.width
+						height: 32
+
+						placeholderText: "Add a step and press Enter"
+						placeholderTextColor: Qt.rgba(1, 1, 1, 0.4)
+						color: "white"
+						font.pixelSize: 13
+						maximumLength: 200
+
+						background: Rectangle
+						{
+							radius: 6
+							color: Qt.rgba(0, 0, 0, 0.2)
+							border.color: newStepField.activeFocus ? Qt.rgba(1, 1, 1, 0.5) : Qt.rgba(1, 1, 1, 0.15)
+							border.width: 1
+						}
+
+						// Keeps the focus, so a whole checklist can be typed in one go.
+						onAccepted:
+							if (rootPanel.tasks.addStep(row.index, newStepField.text))
+								newStepField.clear()
+
+						Keys.onEscapePressed:
+							newStepField.focus = false
 					}
 				}
 			}

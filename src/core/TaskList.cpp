@@ -10,6 +10,7 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QUuid>
+#include <QVariantMap>
 
 namespace
 {
@@ -64,6 +65,14 @@ QVariant	TaskList::data(const QModelIndex &index, int role) const
 			return task.completed;
 		case ActiveRole:
 			return task.id == _activeId;
+		case NotesRole:
+			return task.notes;
+		case StepsRole:
+			return stepList(task);
+		case StepCountRole:
+			return static_cast<int>(task.steps.size());
+		case StepsDoneRole:
+			return task.stepsDone();
 		default:
 			return QVariant();
 	}
@@ -77,7 +86,11 @@ QHash<int, QByteArray>	TaskList::roleNames() const
 		{ DoneRole, "done" },
 		{ EstimateRole, "estimate" },
 		{ CompletedRole, "completed" },
-		{ ActiveRole, "active" }
+		{ ActiveRole, "active" },
+		{ NotesRole, "notes" },
+		{ StepsRole, "steps" },
+		{ StepCountRole, "stepCount" },
+		{ StepsDoneRole, "stepsDone" }
 	};
 }
 
@@ -123,6 +136,20 @@ int	TaskList::activeEstimate() const
 	int	row = rowOf(_activeId);
 
 	return row < 0 ? 0 : _tasks.at(row).estimate;
+}
+
+int	TaskList::activeStepCount() const
+{
+	int	row = rowOf(_activeId);
+
+	return row < 0 ? 0 : static_cast<int>(_tasks.at(row).steps.size());
+}
+
+int	TaskList::activeStepsDone() const
+{
+	int	row = rowOf(_activeId);
+
+	return row < 0 ? 0 : _tasks.at(row).stepsDone();
 }
 
 bool	TaskList::add(const QString &title, int estimate)
@@ -227,6 +254,63 @@ void	TaskList::setEstimate(int row, int estimate)
 	touch();
 }
 
+void	TaskList::setNotes(int row, const QString &notes)
+{
+	if (!validRow(row))
+		return;
+
+	QString	cleaned = cleanNotes(notes);
+
+	if (cleaned == _tasks.at(row).notes)
+		return;
+
+	_tasks[row].notes = cleaned;
+	changed(row, { NotesRole });
+	touch();
+}
+
+bool	TaskList::addStep(int row, const QString &text)
+{
+	QString	trimmed = text.simplified().left(MaximumStepLength);
+
+	if (!validRow(row) || trimmed.isEmpty() || _tasks.at(row).steps.size() >= MaximumSteps)
+		return false;
+
+	_tasks[row].steps.append(Step{ trimmed, false });
+	stepsChanged(row);
+	return true;
+}
+
+void	TaskList::renameStep(int row, int step, const QString &text)
+{
+	QString	trimmed = text.simplified().left(MaximumStepLength);
+
+	// As with a task's title, clearing a step's text does not delete it.
+	if (!validStep(row, step) || trimmed.isEmpty() || trimmed == _tasks.at(row).steps.at(step).text)
+		return;
+
+	_tasks[row].steps[step].text = trimmed;
+	stepsChanged(row);
+}
+
+void	TaskList::setStepDone(int row, int step, bool done)
+{
+	if (!validStep(row, step) || _tasks.at(row).steps.at(step).done == done)
+		return;
+
+	_tasks[row].steps[step].done = done;
+	stepsChanged(row);
+}
+
+void	TaskList::removeStep(int row, int step)
+{
+	if (!validStep(row, step))
+		return;
+
+	_tasks[row].steps.removeAt(step);
+	stepsChanged(row);
+}
+
 void	TaskList::toggleActive(int row)
 {
 	if (!validRow(row))
@@ -303,6 +387,53 @@ int	TaskList::rowOf(const QString &id) const
 bool	TaskList::validRow(int row) const
 {
 	return row >= 0 && row < _tasks.size();
+}
+
+bool	TaskList::validStep(int row, int step) const
+{
+	return validRow(row) && step >= 0 && step < _tasks.at(row).steps.size();
+}
+
+// A step's change moves the task's counts too, and the home screen shows them for the
+// active task.
+void	TaskList::stepsChanged(int row)
+{
+	changed(row, { StepsRole, StepCountRole, StepsDoneRole });
+
+	if (_tasks.at(row).id == _activeId)
+		emit activeChanged();
+
+	touch();
+}
+
+QVariantList	TaskList::stepList(const Task &task)
+{
+	QVariantList	list;
+
+	for (const Step &step : task.steps)
+		list.append(QVariantMap{ { QStringLiteral("text"), step.text }, { QStringLiteral("done"), step.done } });
+
+	return list;
+}
+
+// Unlike a title, a description is free text: its lines are kept, only the blank space
+// around it is dropped.
+QString	TaskList::cleanNotes(const QString &notes)
+{
+	return notes.trimmed().left(MaximumNotesLength);
+}
+
+int	TaskList::Task::stepsDone() const
+{
+	int	done = 0;
+
+	for (const Step &step : steps)
+	{
+		if (step.done)
+			done++;
+	}
+
+	return done;
 }
 
 void	TaskList::changed(int row, const QList<int> &roles)
@@ -388,6 +519,19 @@ void	TaskList::load()
 		task.done = object.value(QStringLiteral("done")).toBool();
 		task.estimate = qBound(1, object.value(QStringLiteral("estimate")).toInt(1), MaximumEstimate);
 		task.completed = qMax(0, object.value(QStringLiteral("completed")).toInt());
+		task.notes = cleanNotes(object.value(QStringLiteral("notes")).toString());
+
+		// Missing in files written before tasks had descriptions and steps.
+		for (const QJsonValue &stepValue : object.value(QStringLiteral("steps")).toArray())
+		{
+			QJsonObject	stepObject = stepValue.toObject();
+			QString		text = stepObject.value(QStringLiteral("text")).toString().simplified().left(MaximumStepLength);
+
+			if (text.isEmpty() || task.steps.size() >= MaximumSteps)
+				continue;
+
+			task.steps.append(Step{ text, stepObject.value(QStringLiteral("done")).toBool() });
+		}
 
 		_tasks.append(task);
 	}
@@ -419,6 +563,20 @@ void	TaskList::save()
 		object.insert(QStringLiteral("done"), task.done);
 		object.insert(QStringLiteral("estimate"), task.estimate);
 		object.insert(QStringLiteral("completed"), task.completed);
+
+		// Left out when empty, so a list without them reads as it always did.
+		if (!task.notes.isEmpty())
+			object.insert(QStringLiteral("notes"), task.notes);
+
+		if (!task.steps.isEmpty())
+		{
+			QJsonArray	steps;
+
+			for (const Step &step : task.steps)
+				steps.append(QJsonObject{ { QStringLiteral("text"), step.text }, { QStringLiteral("done"), step.done } });
+
+			object.insert(QStringLiteral("steps"), steps);
+		}
 
 		array.append(object);
 	}

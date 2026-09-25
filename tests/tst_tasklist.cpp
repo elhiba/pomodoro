@@ -20,6 +20,8 @@ class TestTaskList : public QObject
 		void	estimateIsClamped();
 		void	clearDoneKeepsOpenTasks();
 		void	survivesARestart();
+		void	notesAndStepsSurviveARestart();
+		void	stepsAreTrimmedAndCounted();
 
 	private:
 		static void	wipe();
@@ -126,6 +128,68 @@ void	TestTaskList::clearDoneKeepsOpenTasks()
 
 	QCOMPARE(tasks.count(), 1);
 	QCOMPARE(tasks.data(tasks.index(0), TaskList::TitleRole).toString(), QStringLiteral("b"));
+}
+
+void	TestTaskList::stepsAreTrimmedAndCounted()
+{
+	TaskList	tasks;
+
+	tasks.add(QStringLiteral("report"));
+
+	QVERIFY(!tasks.addStep(0, QStringLiteral("   ")));
+	QVERIFY(!tasks.addStep(5, QStringLiteral("no such task")));
+	QVERIFY(tasks.addStep(0, QStringLiteral("  outline  the   sections ")));
+	QVERIFY(tasks.addStep(0, QStringLiteral("write the intro")));
+	QVERIFY(tasks.addStep(0, QStringLiteral("proofread")));
+
+	QVariantList	steps = tasks.data(tasks.index(0), TaskList::StepsRole).toList();
+
+	QCOMPARE(steps.size(), 3);
+	QCOMPARE(steps.at(0).toMap().value(QStringLiteral("text")).toString(), QStringLiteral("outline the sections"));
+
+	tasks.setStepDone(0, 1, true);
+	QCOMPARE(tasks.activeStepCount(), 3);
+	QCOMPARE(tasks.activeStepsDone(), 1);
+
+	// Clearing a step's text keeps it; removing is its own action.
+	tasks.renameStep(0, 2, QStringLiteral(""));
+	QCOMPARE(tasks.data(tasks.index(0), TaskList::StepCountRole).toInt(), 3);
+
+	tasks.removeStep(0, 0);
+	QCOMPARE(tasks.data(tasks.index(0), TaskList::StepCountRole).toInt(), 2);
+	QCOMPARE(tasks.data(tasks.index(0), TaskList::StepsDoneRole).toInt(), 1);
+}
+
+void	TestTaskList::notesAndStepsSurviveARestart()
+{
+	{
+		TaskList	tasks;
+
+		tasks.add(QStringLiteral("with details"));
+		tasks.setNotes(0, QStringLiteral("  first line\n\nsecond line  "));
+		tasks.addStep(0, QStringLiteral("one"));
+		tasks.addStep(0, QStringLiteral("two"));
+		tasks.setStepDone(0, 1, true);
+
+		tasks.add(QStringLiteral("plain"));
+	}
+
+	TaskList	reloaded;
+
+	QCOMPARE(reloaded.count(), 2);
+
+	// The description keeps its lines; only the space around it goes.
+	QCOMPARE(reloaded.data(reloaded.index(0), TaskList::NotesRole).toString(),
+		QStringLiteral("first line\n\nsecond line"));
+
+	QVariantList	steps = reloaded.data(reloaded.index(0), TaskList::StepsRole).toList();
+
+	QCOMPARE(steps.size(), 2);
+	QCOMPARE(steps.at(1).toMap().value(QStringLiteral("text")).toString(), QStringLiteral("two"));
+	QVERIFY(steps.at(1).toMap().value(QStringLiteral("done")).toBool());
+
+	QVERIFY(reloaded.data(reloaded.index(1), TaskList::NotesRole).toString().isEmpty());
+	QCOMPARE(reloaded.data(reloaded.index(1), TaskList::StepCountRole).toInt(), 0);
 }
 
 void	TestTaskList::survivesARestart()
