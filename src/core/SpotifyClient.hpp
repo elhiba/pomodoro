@@ -15,9 +15,25 @@
 
 #include <QtQml/qqmlregistration.h>
 
+#include "SpotifyEngine.hpp"
+
 class QNetworkReply;
 
-// Plays the user's own Spotify through the Spotify Web API.
+// Spotify for the music panel, in one of two ways.
+//
+// When the build ships the built-in player (SpotifyEngine, go-librespot), Spotify plays
+// inside Pomodoro: signing in, play, pause, skip and what is playing all go to that
+// player. No Client ID, no developer set-up, and the sound comes out of this app.
+//
+// Spotify refuses every Web API call made with that player's token (429 on search, the
+// library, even /v1/me; its internal search endpoints answer 403 -- checked 2026-09-25),
+// so with the player alone there is no search. Music is picked from a shelf of playlists
+// and from Spotify links the user pastes, named through the public oEmbed endpoint. A
+// user who adds a developer Client ID of their own gets search and their library back:
+// the Web API sign-in below is then used for lookups only, and playback stays here.
+//
+// Without it, everything below applies: the Web API remote-controls a Spotify player
+// the user already has open.
 //
 // Spotify does not let a third-party desktop app stream its audio: the only thing its
 // Web API offers is remote control of a Spotify player the user already has open -- the
@@ -42,6 +58,16 @@ class SpotifyClient : public QObject
 	Q_PROPERTY(QString clientId READ clientId WRITE setClientId NOTIFY stateChanged)
 	Q_PROPERTY(QString builtInClientId READ builtInClientId CONSTANT)
 	Q_PROPERTY(QString redirectUri READ redirectUri CONSTANT)
+
+	// True when Spotify plays inside Pomodoro through the built-in player.
+	Q_PROPERTY(bool builtInPlayer READ builtInPlayer CONSTANT)
+
+	// Whether search and the library can be used: always without the built-in player,
+	// and with it only once a developer Client ID has been signed in for lookups.
+	Q_PROPERTY(bool canSearch READ canSearch NOTIFY stateChanged)
+
+	// Spotify's "Liked Songs" as something the built-in player can play.
+	Q_PROPERTY(QString likedSongsUri READ likedSongsUri NOTIFY stateChanged)
 	Q_PROPERTY(bool connected READ connected NOTIFY stateChanged)
 	Q_PROPERTY(bool connecting READ connecting NOTIFY stateChanged)
 	Q_PROPERTY(QString accountName READ accountName NOTIFY stateChanged)
@@ -66,6 +92,9 @@ class SpotifyClient : public QObject
 		QString	clientId() const;
 		QString	builtInClientId() const;
 		QString	redirectUri() const;
+		bool	builtInPlayer() const;
+		bool	canSearch() const;
+		QString	likedSongsUri() const;
 		bool	connected() const;
 		bool	connecting() const;
 		QString	accountName() const;
@@ -98,13 +127,26 @@ class SpotifyClient : public QObject
 		// Reads back what is playing every few seconds, for the now-playing line.
 		void	setPolling(bool polling);
 
+		// The built-in player's volume, 0 to 1. Does nothing for a remote-controlled
+		// Spotify, whose volume is its own.
+		void	setPlayerVolume(qreal volume);
+
 		// Accepts a spotify: URI or an open.spotify.com link and returns the URI form, or
 		// an empty string for anything else.
 		Q_INVOKABLE static QString	toUri(const QString &text);
 
+		// Names a pasted Spotify link through the public oEmbed endpoint, which needs no
+		// sign-in. Answers with linkLookedUp.
+		Q_INVOKABLE void	lookUpLink(const QString &text);
+
 	public slots:
 		void	connectAccount();
 		void	disconnectAccount();
+
+		// The developer Client ID sign-in, which with the built-in player is only used for
+		// search and the library.
+		void	connectSearch();
+		void	disconnectSearch();
 
 		void	search(const QString &query);
 
@@ -118,6 +160,9 @@ class SpotifyClient : public QObject
 		void	playbackFailed(const QString &reason);
 		void	resultsChanged();
 
+		// uri is empty when the link was not one; error then says why.
+		void	linkLookedUp(const QString &uri, const QString &title, const QString &image, const QString &error);
+
 	private:
 		using Handler = std::function<void(int status, const QJsonObject &body, const QString &error)>;
 
@@ -125,7 +170,17 @@ class SpotifyClient : public QObject
 		static constexpr int		AuthTimeoutMs = 180000;
 		static constexpr int		PollIntervalMs = 5000;
 
+		// The built-in player answers locally, so it is asked more often.
+		static constexpr int		PlayerPollIntervalMs = 2000;
+
+		// Tokens from the built-in player last an hour; fetched again well before that.
+		static constexpr int		PlayerTokenSeconds = 45 * 60;
+
+		// Songs queued after the one tapped in a list.
+		static constexpr int		MaximumQueued = 30;
+
 		QNetworkAccessManager	_network;
+		SpotifyEngine			_engine;
 		QTcpServer				_callbackServer;
 		QTimer					_authTimeout;
 		QTimer					_pollTimer;
@@ -164,8 +219,14 @@ class SpotifyClient : public QObject
 		void	fetchAccount();
 		void	poll();
 		void	playOn(const QJsonObject &body, const QString &deviceId);
+
+		// The built-in player's side of play/pause/skip/poll.
+		void	playerCommand(const QString &path, const QJsonObject &body, bool startsPlayback);
+		void	playerQueue(QStringList uris);
+		void	playerPoll();
 		void	fetchResults(const QString &path, std::function<QVariantList(const QJsonObject &)> parse);
 		void	finishConnecting(const QString &error);
+		void	startWebSignIn();
 
 		// An authorised Web API call. Refreshes the access token first when it has run out,
 		// and once more if Spotify answers 401 anyway.

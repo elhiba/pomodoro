@@ -131,6 +131,27 @@ SpotifyClient::SpotifyClient(QObject *parent)
 		finishConnecting(QStringLiteral("Spotify sign-in timed out. Press Connect to try again."));
 	});
 	connect(&_pollTimer, &QTimer::timeout, this, &SpotifyClient::poll);
+
+	connect(&_engine, &SpotifyEngine::stateChanged, this, [this]()
+	{
+		// Signed in: the account's display name comes from the Web API with the player's
+		// token, which is also the first check that the token works there.
+		if (_engine.ready() && _accountName.isEmpty() && canSearch())
+			fetchAccount();
+
+		if (!_engine.ready())
+			_accessToken.clear();
+
+		emit stateChanged();
+	});
+
+	// Signed in on an earlier run: the player starts now, so it is ready by the time
+	// something is played.
+	if (_engine.available())
+	{
+		_pollTimer.setInterval(PlayerPollIntervalMs);
+		_engine.start();
+	}
 }
 
 QString	SpotifyClient::clientId() const
@@ -148,13 +169,37 @@ QString	SpotifyClient::redirectUri() const
 	return QStringLiteral("http://127.0.0.1:%1/callback").arg(CallbackPort);
 }
 
+bool	SpotifyClient::builtInPlayer() const
+{
+	return _engine.available();
+}
+
+bool	SpotifyClient::canSearch() const
+{
+	return !_engine.available() || (!_refreshToken.isEmpty() && !_clientId.isEmpty());
+}
+
+QString	SpotifyClient::likedSongsUri() const
+{
+	return _engine.username().isEmpty()
+		? QString()
+		: QStringLiteral("spotify:user:%1:collection").arg(_engine.username());
+}
+
 bool	SpotifyClient::connected() const
 {
+	if (_engine.available())
+		return _engine.ready() || _engine.remembered();
+
 	return !_refreshToken.isEmpty();
 }
 
 bool	SpotifyClient::connecting() const
 {
+	if (_engine.available())
+		return _connecting || _engine.state() == SpotifyEngine::SigningIn
+			|| (_engine.state() == SpotifyEngine::Starting && !_engine.remembered());
+
 	return _connecting;
 }
 
@@ -165,6 +210,25 @@ QString	SpotifyClient::accountName() const
 
 QString	SpotifyClient::statusText() const
 {
+	if (_engine.available())
+	{
+		switch (_engine.state())
+		{
+			case SpotifyEngine::SigningIn:
+				return QStringLiteral("Sign in on the Spotify page that just opened in your browser…");
+			case SpotifyEngine::Starting:
+				return QStringLiteral("Starting Spotify…");
+			case SpotifyEngine::Failed:
+				return _engine.errorText();
+			case SpotifyEngine::Ready:
+				return _accountName.isEmpty()
+					? QStringLiteral("Signed in to Spotify")
+					: QStringLiteral("Signed in to Spotify as %1").arg(_accountName);
+			default:
+				return _engine.errorText().isEmpty() ? QStringLiteral("Not signed in") : _engine.errorText();
+		}
+	}
+
 	if (_connecting)
 		return QStringLiteral("Approve Pomodoro in the browser window that just opened…");
 
@@ -206,6 +270,10 @@ QString	SpotifyClient::artUrl() const
 
 bool	SpotifyClient::needsReconnect() const
 {
+	// The built-in player's sign-in covers everything.
+	if (_engine.available())
+		return false;
+
 	return connected() && !_grantedScopes.split(QLatin1Char(' ')).contains(QLatin1String(LibraryScope));
 }
 
@@ -243,6 +311,41 @@ void	SpotifyClient::setClientId(const QString &clientId)
 
 void	SpotifyClient::play(const QString &uri)
 {
+	if (_engine.available())
+	{
+		if (!uri.isEmpty())
+		{
+			playerCommand(QStringLiteral("/player/play"), QJsonObject{ { QStringLiteral("uri"), uri } }, true);
+			return;
+		}
+
+		// Nothing chosen: carry on with whatever the player has loaded. A player that has
+		// just started has nothing, and resuming nothing "succeeds" in silence, so it
+		// starts the user's Liked Songs instead.
+		_engine.whenReady([this]()
+		{
+			if (!_engine.ready())
+			{
+				playerCommand(QStringLiteral("/player/resume"), QJsonObject(), true);
+				return;
+			}
+
+			_engine.call("GET", QStringLiteral("/status"), QJsonObject(), [this](int status, const QJsonObject &body)
+			{
+				bool	loaded = status == 200 && !body.value(QStringLiteral("stopped")).toBool()
+					&& body.value(QStringLiteral("track")).isObject();
+
+				if (loaded)
+					playerCommand(QStringLiteral("/player/resume"), QJsonObject(), true);
+				else
+					playerCommand(QStringLiteral("/player/play"), QJsonObject{ { QStringLiteral("uri"),
+						QStringLiteral("spotify:user:%1:collection").arg(_engine.username()) } }, true);
+			});
+		});
+
+		return;
+	}
+
 	QJsonObject	body;
 
 	if (uri.startsWith(QLatin1String("spotify:track:")) || uri.startsWith(QLatin1String("spotify:episode:")))
@@ -255,6 +358,12 @@ void	SpotifyClient::play(const QString &uri)
 
 void	SpotifyClient::next()
 {
+	if (_engine.available())
+	{
+		playerCommand(QStringLiteral("/player/next"), QJsonObject(), false);
+		return;
+	}
+
 	api("POST", QStringLiteral("/v1/me/player/next"), QJsonObject(),
 		[this](int, const QJsonObject &, const QString &)
 		{
@@ -264,6 +373,12 @@ void	SpotifyClient::next()
 
 void	SpotifyClient::previous()
 {
+	if (_engine.available())
+	{
+		playerCommand(QStringLiteral("/player/prev"), QJsonObject(), false);
+		return;
+	}
+
 	api("POST", QStringLiteral("/v1/me/player/previous"), QJsonObject(),
 		[this](int, const QJsonObject &, const QString &)
 		{
@@ -278,6 +393,31 @@ void	SpotifyClient::playResult(int index)
 
 	QVariantMap	chosen = _results.at(index).toMap();
 	QJsonObject	body;
+
+	// The built-in player starts one URI. A song is played and the songs after it in the
+	// list are queued behind it, so next walks the list as it does in Spotify.
+	if (_engine.available())
+	{
+		QString	uri = chosen.value(QStringLiteral("uri")).toString();
+
+		playerCommand(QStringLiteral("/player/play"), QJsonObject{ { QStringLiteral("uri"), uri } }, true);
+
+		if (chosen.value(QStringLiteral("kind")).toString() != QLatin1String("track"))
+			return;
+
+		QStringList	following;
+
+		for (int row = index + 1; row < _results.size() && following.size() < MaximumQueued; row++)
+		{
+			QVariantMap	item = _results.at(row).toMap();
+
+			if (item.value(QStringLiteral("kind")).toString() == QLatin1String("track"))
+				following.append(item.value(QStringLiteral("uri")).toString());
+		}
+
+		playerQueue(following);
+		return;
+	}
 
 	if (chosen.value(QStringLiteral("kind")).toString() == QLatin1String("track"))
 	{
@@ -466,6 +606,12 @@ void	SpotifyClient::fetchResults(const QString &path, std::function<QVariantList
 
 void	SpotifyClient::pause()
 {
+	if (_engine.available())
+	{
+		playerCommand(QStringLiteral("/player/pause"), QJsonObject(), false);
+		return;
+	}
+
 	api("PUT", QStringLiteral("/v1/me/player/pause"), QJsonObject(),
 		[this](int, const QJsonObject &, const QString &)
 		{
@@ -523,7 +669,93 @@ QString	SpotifyClient::toUri(const QString &text)
 	return QStringLiteral("spotify:%1:%2").arg(segments.at(0), segments.at(1));
 }
 
+void	SpotifyClient::setPlayerVolume(qreal volume)
+{
+	if (!_engine.ready())
+		return;
+
+	int	steps = qRound(qBound(0.0, volume, 1.0) * 100);
+
+	_engine.call("POST", QStringLiteral("/player/volume"),
+		QJsonObject{ { QStringLiteral("volume"), steps } },
+		[](int, const QJsonObject &) {});
+}
+
 void	SpotifyClient::connectAccount()
+{
+	if (_engine.available())
+	{
+		_engine.signIn();
+		emit stateChanged();
+		return;
+	}
+
+	startWebSignIn();
+}
+
+void	SpotifyClient::connectSearch()
+{
+	startWebSignIn();
+}
+
+void	SpotifyClient::disconnectSearch()
+{
+	QSettings	settings;
+
+	settings.remove(QLatin1String(KeyRefreshToken));
+	settings.remove(QLatin1String(KeyScopes));
+
+	_refreshToken.clear();
+	_accessToken.clear();
+	_accessExpiry = QDateTime();
+	_grantedScopes.clear();
+	_results.clear();
+	_resultsError.clear();
+
+	emit resultsChanged();
+	emit stateChanged();
+}
+
+void	SpotifyClient::lookUpLink(const QString &text)
+{
+	QString	uri = toUri(text);
+
+	if (uri.isEmpty())
+	{
+		emit linkLookedUp(QString(), QString(), QString(),
+			QStringLiteral("That is not a Spotify link. In Spotify, use Share, then Copy link."));
+		return;
+	}
+
+	QStringList	parts = uri.split(QLatin1Char(':'));
+	QUrl		page(QStringLiteral("https://open.spotify.com/%1/%2").arg(parts.at(1), parts.at(2)));
+	QUrl		oembed(QStringLiteral("https://open.spotify.com/oembed"));
+	QUrlQuery	query;
+
+	query.addQueryItem(QStringLiteral("url"), page.toString());
+	oembed.setQuery(query);
+
+	QNetworkReply	*reply = _network.get(QNetworkRequest(oembed));
+
+	connect(reply, &QNetworkReply::finished, this, [this, reply, uri]()
+	{
+		reply->deleteLater();
+
+		QJsonObject	body = QJsonDocument::fromJson(reply->readAll()).object();
+		QString		title = body.value(QStringLiteral("title")).toString().trimmed();
+
+		if (reply->error() != QNetworkReply::NoError || title.isEmpty())
+		{
+			emit linkLookedUp(QString(), QString(), QString(),
+				QStringLiteral("Spotify does not know that link. Check it and try again."));
+			return;
+		}
+
+		emit linkLookedUp(uri, title, body.value(QStringLiteral("thumbnail_url")).toString(), QString());
+	});
+}
+
+void	SpotifyClient::startWebSignIn()
 {
 	if (_connecting)
 		return;
@@ -574,6 +806,9 @@ void	SpotifyClient::connectAccount()
 
 void	SpotifyClient::disconnectAccount()
 {
+	if (_engine.available())
+		_engine.signOut();
+
 	QSettings	settings;
 
 	settings.remove(QLatin1String(KeyRefreshToken));
@@ -695,6 +930,35 @@ void	SpotifyClient::refreshAccessToken(std::function<void()> then)
 
 	_refreshing = true;
 
+	// The built-in player hands out a token for its own session. Spotify refuses it for
+	// the Web API today, so a developer Client ID sign-in, when there is one, is used for
+	// lookups instead.
+	if (_engine.available() && _refreshToken.isEmpty())
+	{
+		_engine.whenReady([this]()
+		{
+			_engine.call("POST", QStringLiteral("/token"), QJsonObject(), [this](int status, const QJsonObject &body)
+			{
+				_refreshing = false;
+
+				if (status == 200)
+				{
+					_accessToken = body.value(QStringLiteral("token")).toString();
+					_accessExpiry = QDateTime::currentDateTimeUtc().addSecs(PlayerTokenSeconds);
+				}
+				else
+					_errorText = QStringLiteral("Sign in with Spotify first.");
+
+				const QList<std::function<void()>>	waiting = std::exchange(_waitingForToken, {});
+
+				for (const std::function<void()> &next : waiting)
+					next();
+			});
+		});
+
+		return;
+	}
+
 	QUrlQuery	form;
 
 	form.addQueryItem(QStringLiteral("grant_type"), QStringLiteral("refresh_token"));
@@ -786,6 +1050,12 @@ void	SpotifyClient::fetchAccount()
 
 void	SpotifyClient::poll()
 {
+	if (_engine.available())
+	{
+		playerPoll();
+		return;
+	}
+
 	api("GET", QStringLiteral("/v1/me/player/currently-playing?additional_types=episode"), QJsonObject(),
 		[this](int status, const QJsonObject &body, const QString &)
 		{
@@ -911,6 +1181,90 @@ void	SpotifyClient::playOn(const QJsonObject &body, const QString &deviceId)
 	});
 }
 
+void	SpotifyClient::playerCommand(const QString &path, const QJsonObject &body, bool startsPlayback)
+{
+	_engine.whenReady([this, path, body, startsPlayback]()
+	{
+		if (!_engine.ready())
+		{
+			if (startsPlayback)
+			{
+				emit playbackFailed(_engine.errorText().isEmpty()
+					? QStringLiteral("Sign in with Spotify in the music panel first.")
+					: _engine.errorText());
+			}
+
+			return;
+		}
+
+		_engine.call("POST", path, body, [this, startsPlayback](int status, const QJsonObject &)
+		{
+			if (startsPlayback)
+			{
+				if (status >= 200 && status < 300)
+					emit playbackStarted();
+				else
+					emit playbackFailed(status == 0
+						? QStringLiteral("The Spotify player is not answering.")
+						: QStringLiteral("Spotify would not play that (%1).").arg(status));
+			}
+
+			QTimer::singleShot(700, this, &SpotifyClient::playerPoll);
+		});
+	});
+}
+
+// One at a time, in order: queued in parallel they would land shuffled.
+void	SpotifyClient::playerQueue(QStringList uris)
+{
+	if (uris.isEmpty() || !_engine.ready())
+		return;
+
+	QString	uri = uris.takeFirst();
+
+	_engine.call("POST", QStringLiteral("/player/add_to_queue"), QJsonObject{ { QStringLiteral("uri"), uri } },
+		[this, uris](int status, const QJsonObject &)
+		{
+			if (status >= 200 && status < 300)
+				playerQueue(uris);
+		});
+}
+
+void	SpotifyClient::playerPoll()
+{
+	if (!_engine.ready())
+		return;
+
+	_engine.call("GET", QStringLiteral("/status"), QJsonObject(), [this](int status, const QJsonObject &body)
+	{
+		if (status != 200 && status != 204)
+			return;
+
+		QJsonObject	track = body.value(QStringLiteral("track")).toObject();
+		QStringList	artists;
+
+		for (const QJsonValue &value : track.value(QStringLiteral("artist_names")).toArray())
+			artists.append(value.toString());
+
+		QString	title = track.value(QStringLiteral("name")).toString();
+		QString	artist = artists.join(QStringLiteral(", "));
+		QString	art = track.value(QStringLiteral("album_cover_url")).toString();
+		bool	playing = status == 200 && !track.isEmpty()
+			&& !body.value(QStringLiteral("paused")).toBool()
+			&& !body.value(QStringLiteral("stopped")).toBool();
+
+		if (title == _track && artist == _artist && playing == _isPlaying && art == _artUrl)
+			return;
+
+		_track = title;
+		_artist = artist;
+		_artUrl = art;
+		_isPlaying = playing;
+
+		emit nowPlayingChanged();
+	});
+}
+
 void	SpotifyClient::finishConnecting(const QString &error)
 {
 	_authTimeout.stop();
@@ -927,9 +1281,9 @@ void	SpotifyClient::finishConnecting(const QString &error)
 void	SpotifyClient::api(const QByteArray &verb, const QString &path, const QJsonObject &body,
 	Handler handler, bool retried)
 {
-	if (_refreshToken.isEmpty())
+	if (!connected())
 	{
-		handler(0, QJsonObject(), QStringLiteral("Connect Spotify in Settings, under Music, first."));
+		handler(0, QJsonObject(), QStringLiteral("Sign in with Spotify in the music panel first."));
 		return;
 	}
 

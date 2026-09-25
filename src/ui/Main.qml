@@ -375,6 +375,81 @@ Window
 		onSkipRequested: (step) => mainWindow.skipMusic(step)
 		onStationAdded: (name, note, url) => mainWindow.addStation(name, note, url)
 		onStationRemoved: (url) => mainWindow.removeStation(url)
+
+		spotifyShelf: mainWindow.spotifyShelf
+		onSpotifyPicked: (uri) => mainWindow.playSpotify(uri)
+		onSpotifyAdded: (name, uri, image) => mainWindow.addSpotifyLink(name, uri, image)
+		onSpotifyRemoved: (uri) => mainWindow.removeSpotifyLink(uri)
+	}
+
+	// What the built-in Spotify player offers without search (Spotify refuses lookups
+	// from it): focus playlists by Spotify and Lofi Girl, each checked through oEmbed and
+	// played through the player on 2026-09-25.
+	readonly property var spotifyPicks: [
+		{ name: "lofi beats", uri: "spotify:playlist:37i9dQZF1DWWQRwui0ExPn", image: "https://i.scdn.co/image/ab67706f00000002266beb50b0032b0f140a749e" },
+		{ name: "Lofi Girl - beats to relax/study to", uri: "spotify:playlist:0vvXsWCC9xrXsKd4FyS8kM", image: "https://image-cdn-ak.spotifycdn.com/image/ab67706c0000da848bc80c95b9d248cf462c0bd1" },
+		{ name: "Deep Focus", uri: "spotify:playlist:37i9dQZF1DWZeKCadgRdKQ", image: "https://i.scdn.co/image/ab67706f000000026020f2f6476db518ef747da4" },
+		{ name: "Peaceful Piano", uri: "spotify:playlist:37i9dQZF1DX4sWSpwq3LiO", image: "https://i.scdn.co/image/ab67706f0000000270e1fb7db7b45809d6a80377" },
+		{ name: "Jazz in the Background", uri: "spotify:playlist:37i9dQZF1DWV7EzJMK2FUI", image: "https://i.scdn.co/image/ab67706f00000002472120b92edea982b5feb264" },
+		{ name: "Brain Food", uri: "spotify:playlist:37i9dQZF1DWXLeA8Omikj7", image: "https://i.scdn.co/image/ab67706f00000002e9f13d8a7595736a0a8efa72" },
+		{ name: "Instrumental Study", uri: "spotify:playlist:37i9dQZF1DX9sIqqvKsjG8", image: "https://i.scdn.co/image/ab67706f000000026cb530ab9aafafdaab62f4bb" },
+		{ name: "Coding Mode", uri: "spotify:playlist:37i9dQZF1DX5trt9i14X7j", image: "https://i.scdn.co/image/ab67706f00000002863b311d4b787ed621f7e696" },
+		{ name: "Nature Sounds", uri: "spotify:playlist:37i9dQZF1DX4PP3DA4J0N8", image: "https://i.scdn.co/image/ab67706f00000002e909a20522cfdb017c798ba8" },
+		{ name: "Ambient Relaxation", uri: "spotify:playlist:37i9dQZF1DX3Ogo9pFvBkY", image: "https://i.scdn.co/image/ab67706f0000000226b7b546f240016f02447692" }
+	]
+
+	// Links the user saved, stored as JSON like the stations.
+	readonly property var savedSpotify:
+	{
+		try
+		{
+			let saved = JSON.parse(AppSettings.spotifySaved || "[]")
+
+			return Array.isArray(saved)
+				? saved.filter((item) => item && typeof item.uri === "string")
+				: []
+		}
+		catch (error)
+		{
+			return []
+		}
+	}
+
+	// Liked Songs first (once the player knows whose they are), then the picks, then the
+	// user's own.
+	readonly property var spotifyShelf:
+	{
+		let shelf = []
+
+		if (MusicPlayer.spotify.likedSongsUri.length > 0)
+			shelf.push({ name: "Liked Songs", uri: MusicPlayer.spotify.likedSongsUri, image: "" })
+
+		return shelf.concat(mainWindow.spotifyPicks, mainWindow.savedSpotify.map((item) => ({
+			name: item.name, uri: item.uri, image: item.image || "", custom: true
+		})))
+	}
+
+	function playSpotify(uri)
+	{
+		AppSettings.spotifyUri = uri
+
+		if (!MusicPlayer.active)
+			MusicPlayer.play()
+	}
+
+	function addSpotifyLink(name, uri, image)
+	{
+		let saved = mainWindow.savedSpotify.filter((item) => item.uri !== uri)
+
+		saved.push({ name: name, uri: uri, image: image })
+		AppSettings.spotifySaved = JSON.stringify(saved)
+
+		mainWindow.playSpotify(uri)
+	}
+
+	function removeSpotifyLink(uri)
+	{
+		AppSettings.spotifySaved = JSON.stringify(mainWindow.savedSpotify.filter((item) => item.uri !== uri))
 	}
 
 	// The radio list the app ships with. Every one was checked to answer with audio and an

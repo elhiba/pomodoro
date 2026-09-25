@@ -93,6 +93,8 @@ qt_add_executable(pomodoro
 	src/core/StreamMetadata.cpp
 	src/core/StationProbe.hpp
 	src/core/StationProbe.cpp
+	src/core/SpotifyEngine.hpp
+	src/core/SpotifyEngine.cpp
 
 	src/core/MediaControls.hpp
 	src/core/MediaControls.cpp

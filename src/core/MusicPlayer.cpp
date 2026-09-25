@@ -18,6 +18,9 @@ MusicPlayer::MusicPlayer(QObject *parent)
 	{
 		_ducked = false;
 		_output->setVolume(_volume);
+
+		if (_kind == Spotify)
+			_spotify->setPlayerVolume(_volume);
 	});
 
 	connect(&_watchdog, &QTimer::timeout, this, &MusicPlayer::onWatchdogTimeout);
@@ -345,6 +348,9 @@ void	MusicPlayer::setVolume(qreal volume)
 	_volume = volume;
 	_output->setVolume(_ducked ? _volume * DuckLevel : _volume);
 
+	if (_kind == Spotify)
+		_spotify->setPlayerVolume(_ducked ? _volume * DuckLevel : _volume);
+
 	emit volumeChanged();
 }
 
@@ -352,12 +358,17 @@ void	MusicPlayer::duck(int milliseconds)
 {
 	// The alarm is a short sample at its own volume, and music at full volume buried it
 	// -- worse at the end of a break, when "focus only" music starts again at the same
-	// moment the alarm sounds. Spotify plays in its own app, whose volume is not ours.
-	if (_kind == Spotify || milliseconds <= 0)
+	// moment the alarm sounds. A remote-controlled Spotify plays in its own app, whose
+	// volume is not ours; the built-in player's is.
+	if ((_kind == Spotify && !_spotify->builtInPlayer()) || milliseconds <= 0)
 		return;
 
 	_ducked = true;
 	_output->setVolume(_volume * DuckLevel);
+
+	if (_kind == Spotify)
+		_spotify->setPlayerVolume(_volume * DuckLevel);
+
 	_duckTimer.start(milliseconds);
 }
 
@@ -369,8 +380,9 @@ void	MusicPlayer::play()
 		return;
 	}
 
-	// Spotify plays in Spotify: this only asks it to. There is no connection here to
-	// retry, so a refusal is final until the user presses play again.
+	// Spotify is played by its own player -- the built-in one or the user's Spotify app --
+	// and this only asks it to. There is no connection here to retry, so a refusal is
+	// final until the user presses play again.
 	if (_kind == Spotify)
 	{
 		if (_wantsPlayback)
@@ -855,9 +867,11 @@ void	MusicPlayer::updateControls()
 	// Listed with the desktop while the user has any interest in music: playing,
 	// trying to, or paused and able to come back. Idle and failed drop the entry.
 	//
-	// Never for Spotify: its own app already has the desktop's media controls, and a
-	// second entry for the same music would only be confusing.
-	bool	enabled = (_wantsPlayback || _status == Paused) && _kind != Spotify;
+	// Not for a remote-controlled Spotify: its own app already has the desktop's media
+	// controls, and a second entry for the same music would only be confusing. The
+	// built-in player has none of its own, so it gets this one.
+	bool	enabled = (_wantsPlayback || _status == Paused)
+		&& (_kind != Spotify || _spotify->builtInPlayer());
 
 	MediaControls::PlaybackState	state = MediaControls::Stopped;
 

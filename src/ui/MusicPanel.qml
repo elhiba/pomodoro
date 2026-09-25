@@ -28,9 +28,17 @@ Item
 	signal stationAdded(string name, string note, string url)
 	signal stationRemoved(string url)
 
+	// The built-in Spotify player's shelf: Liked Songs, the picks and the user's saved
+	// links, as { name, uri, image, custom }. Picking plays; Main.qml writes the settings.
+	required property var spotifyShelf
+
+	signal spotifyPicked(string uri)
+	signal spotifyAdded(string name, string uri, string image)
+	signal spotifyRemoved(string uri)
+
 	readonly property bool typing: youtubeSearch.activeFocus || spotifySearch.activeFocus
 		|| stationLinkField.activeFocus || stationNameField.activeFocus
-		|| clientIdField.activeFocus
+		|| clientIdField.activeFocus || spotifyLinkField.activeFocus || rootPanel.searchKeyTyping
 
 	readonly property string source: AppSettings.musicSource
 
@@ -326,8 +334,9 @@ Item
 				anchors.rightMargin: 12
 				anchors.verticalCenter: parent.verticalCenter
 
-				// Spotify has its own volume; this one would change nothing there.
-				visible: rootPanel.source !== "spotify"
+				// A remote-controlled Spotify has its own volume; this one would change
+				// nothing there. The built-in player follows it.
+				visible: rootPanel.source !== "spotify" || MusicPlayer.spotify.builtInPlayer
 
 				from: 0
 				to: 1
@@ -923,7 +932,9 @@ Item
 					Text
 					{
 						width: parent.width
-						text: MusicPlayer.spotify.clientId.length > 0
+						text: MusicPlayer.spotify.builtInPlayer
+							? "Sign in with your Spotify account to search your music and play it right here in Pomodoro. Spotify Premium is needed."
+							: MusicPlayer.spotify.clientId.length > 0
 							? "Sign in with your Spotify account to search your music and control it from here. It plays in your Spotify app, with Premium."
 							: "Spotify sign-in is not switched on in this copy of Pomodoro yet."
 						color: "white"
@@ -936,7 +947,7 @@ Item
 					{
 						width: parent.width
 						visible: MusicPlayer.spotify.statusText.length > 0 && !MusicPlayer.spotify.connecting
-							&& MusicPlayer.spotify.clientId.length > 0
+							&& (MusicPlayer.spotify.clientId.length > 0 || MusicPlayer.spotify.builtInPlayer)
 						text: MusicPlayer.spotify.statusText
 						textFormat: Text.PlainText
 						color: Qt.rgba(1, 1, 1, 0.6)
@@ -951,7 +962,8 @@ Item
 					Chip
 					{
 						anchors.horizontalCenter: parent.horizontalCenter
-						visible: MusicPlayer.spotify.builtInClientId.length === 0 && !rootPanel.spotifyDeveloper
+						visible: !MusicPlayer.spotify.builtInPlayer
+							&& MusicPlayer.spotify.builtInClientId.length === 0 && !rootPanel.spotifyDeveloper
 						label: "I have a Spotify developer key"
 
 						onClicked:
@@ -963,7 +975,8 @@ Item
 						id: clientIdField
 
 						width: parent.width
-						visible: MusicPlayer.spotify.builtInClientId.length === 0 && rootPanel.spotifyDeveloper
+						visible: !MusicPlayer.spotify.builtInPlayer
+							&& MusicPlayer.spotify.builtInClientId.length === 0 && rootPanel.spotifyDeveloper
 						text: AppSettings.spotifyClientId
 						placeholderText: "Spotify Client ID, then Enter"
 						iconSource: "assets/icons/spotify.svg"
@@ -988,9 +1001,13 @@ Item
 					PillButton
 					{
 						anchors.horizontalCenter: parent.horizontalCenter
-						visible: MusicPlayer.spotify.clientId.length > 0
-						label: MusicPlayer.spotify.connecting ? "Waiting for the browser…" : "Sign in with Spotify"
-						enabled: !MusicPlayer.spotify.connecting
+						visible: MusicPlayer.spotify.clientId.length > 0 || MusicPlayer.spotify.builtInPlayer
+						// The built-in player keeps its sign-in page waiting, so a closed browser
+						// tab can be opened again from here.
+						label: !MusicPlayer.spotify.connecting ? "Sign in with Spotify"
+							: MusicPlayer.spotify.builtInPlayer ? "Open the sign-in page again"
+							: "Waiting for the browser…"
+						enabled: !MusicPlayer.spotify.connecting || MusicPlayer.spotify.builtInPlayer
 
 						onClicked:
 							MusicPlayer.spotify.connectAccount()
@@ -1085,6 +1102,7 @@ Item
 						id: spotifySearch
 
 						width: parent.width
+						visible: MusicPlayer.spotify.canSearch
 						placeholderText: "Search Spotify: songs, playlists, albums, artists"
 
 						onSubmitted: (query) =>
@@ -1097,6 +1115,7 @@ Item
 					Row
 					{
 						spacing: 6
+						visible: MusicPlayer.spotify.canSearch
 
 						Repeater
 						{
@@ -1129,7 +1148,7 @@ Item
 					anchors.left: parent.left
 					anchors.right: parent.right
 
-					visible: MusicPlayer.spotify.connected
+					visible: MusicPlayer.spotify.connected && MusicPlayer.spotify.canSearch
 					model: MusicPlayer.spotify.results
 					busy: MusicPlayer.spotify.searching
 					message: MusicPlayer.spotify.resultsError.length > 0
@@ -1138,6 +1157,385 @@ Item
 
 					onActivated: (index, item) =>
 						MusicPlayer.playSpotifyResult(index)
+				}
+
+				// The built-in player without search: a shelf of playlists to tap, links the
+				// user pastes, and -- tucked at the bottom -- search for those who add a
+				// developer key of their own.
+				GridView
+				{
+					id: spotifyShelfGrid
+
+					anchors.top: spotifyTop.bottom
+					anchors.topMargin: 8
+					anchors.bottom: parent.bottom
+					anchors.left: parent.left
+					anchors.right: parent.right
+
+					visible: MusicPlayer.spotify.connected && !MusicPlayer.spotify.canSearch
+						&& !rootPanel.addingSpotifyLink
+
+					clip: true
+					boundsBehavior: Flickable.StopAtBounds
+					cellWidth: (width - 8) / 2
+					cellHeight: 64
+
+					model: rootPanel.spotifyShelf.concat([{ add: true }])
+
+					ScrollBar.vertical: SlimScrollBar {}
+
+					delegate: Item
+					{
+						id: shelfCell
+
+						required property var modelData
+
+						readonly property bool adder: shelfCell.modelData.add === true
+						readonly property bool current: !shelfCell.adder
+							&& AppSettings.spotifyUri === shelfCell.modelData.uri
+
+						width: spotifyShelfGrid.cellWidth
+						height: spotifyShelfGrid.cellHeight
+
+						Rectangle
+						{
+							anchors.fill: parent
+							anchors.margins: 3
+							radius: 10
+
+							color: shelfCell.current
+								? Qt.rgba(1, 1, 1, 0.24)
+								: shelfHover.hovered ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(1, 1, 1, 0.05)
+
+							border.color: shelfCell.current ? Qt.rgba(1, 1, 1, 0.6)
+								: shelfCell.adder ? Qt.rgba(1, 1, 1, 0.25) : "transparent"
+							border.width: 1
+
+							Row
+							{
+								anchors.centerIn: parent
+								spacing: 8
+								visible: shelfCell.adder
+
+								Image
+								{
+									anchors.verticalCenter: parent.verticalCenter
+									width: 18
+									height: 18
+									source: "assets/icons/plus.svg"
+									sourceSize.width: 36
+									sourceSize.height: 36
+								}
+
+								Text
+								{
+									anchors.verticalCenter: parent.verticalCenter
+									text: "Add a Spotify link"
+									color: "white"
+									font.pixelSize: 13
+								}
+							}
+
+							// The cover, or the Spotify logo for Liked Songs.
+							Rectangle
+							{
+								id: shelfArt
+
+								anchors.left: parent.left
+								anchors.leftMargin: 7
+								anchors.verticalCenter: parent.verticalCenter
+
+								width: 44
+								height: 44
+								radius: 6
+								clip: true
+								visible: !shelfCell.adder
+								color: Qt.rgba(0, 0, 0, 0.2)
+
+								Image
+								{
+									anchors.fill: parent
+									anchors.margins: (shelfCell.modelData.image || "").length > 0 ? 0 : 10
+									source: (shelfCell.modelData.image || "").length > 0
+										? shelfCell.modelData.image
+										: "assets/icons/spotify.svg"
+									sourceSize.width: 88
+									sourceSize.height: 88
+									fillMode: Image.PreserveAspectCrop
+									asynchronous: true
+								}
+							}
+
+							Text
+							{
+								anchors.left: shelfArt.right
+								anchors.leftMargin: 10
+								anchors.right: parent.right
+								anchors.rightMargin: shelfCell.modelData.custom ? 26 : 8
+								anchors.verticalCenter: parent.verticalCenter
+
+								visible: !shelfCell.adder
+								text: shelfCell.modelData.name || ""
+								textFormat: Text.PlainText
+								color: "white"
+								font.pixelSize: 13
+								font.bold: shelfCell.current
+								wrapMode: Text.WordWrap
+								maximumLineCount: 2
+								elide: Text.ElideRight
+							}
+
+							HoverHandler
+							{
+								id: shelfHover
+								cursorShape: Qt.PointingHandCursor
+							}
+
+							TapHandler
+							{
+								onTapped:
+								{
+									if (shelfCell.adder)
+									{
+										rootPanel.addingSpotifyLink = true
+										spotifyLinkField.forceActiveFocus()
+										return
+									}
+
+									rootPanel.spotifyPicked(shelfCell.modelData.uri)
+								}
+							}
+
+							Button
+							{
+								id: removeShelfBtn
+
+								anchors.right: parent.right
+								anchors.top: parent.top
+								anchors.rightMargin: 4
+								anchors.topMargin: 4
+
+								width: 22
+								height: 22
+
+								visible: shelfCell.modelData.custom === true
+								opacity: shelfHover.hovered || removeShelfBtn.hovered ? 1.0 : 0.0
+
+								background: Rectangle
+								{
+									radius: 11
+									color: removeShelfBtn.hovered ? Qt.rgba(1, 1, 1, 0.3) : Qt.rgba(1, 1, 1, 0.12)
+								}
+
+								icon.source: "assets/icons/close.svg"
+								icon.color: "white"
+								icon.width: 10
+								icon.height: 10
+
+								ToolTip.visible: removeShelfBtn.hovered
+								ToolTip.delay: 500
+								ToolTip.text: "Remove from the shelf"
+
+								onClicked:
+									rootPanel.spotifyRemoved(shelfCell.modelData.uri)
+							}
+						}
+					}
+
+					// Search is there for whoever brings a developer key; nobody else needs
+					// to know what one is.
+					footer: Column
+					{
+						width: spotifyShelfGrid.width - 8
+						topPadding: 10
+						spacing: 8
+
+						Chip
+						{
+							anchors.horizontalCenter: parent.horizontalCenter
+							visible: !rootPanel.searchKeyOpen
+							label: "Want search? Add your Spotify developer key"
+
+							onClicked:
+								rootPanel.searchKeyOpen = true
+						}
+
+						Text
+						{
+							width: parent.width
+							visible: rootPanel.searchKeyOpen
+							text: "Spotify only allows search through a developer key. Create an app at developer.spotify.com/dashboard, add the redirect URI " + MusicPlayer.spotify.redirectUri + ", paste its Client ID here, then sign in. The music still plays here."
+							textFormat: Text.PlainText
+							color: Qt.rgba(1, 1, 1, 0.6)
+							font.pixelSize: 11
+							wrapMode: Text.WordWrap
+						}
+
+						SearchField
+						{
+							id: searchKeyField
+
+							width: parent.width
+							visible: rootPanel.searchKeyOpen
+							text: AppSettings.spotifyClientId
+							placeholderText: "Spotify Client ID, then Enter"
+							iconSource: "assets/icons/spotify.svg"
+
+							onSubmitted: (value) => AppSettings.spotifyClientId = value
+							onActiveFocusChanged: rootPanel.searchKeyTyping = activeFocus
+						}
+
+						PillButton
+						{
+							anchors.horizontalCenter: parent.horizontalCenter
+							visible: rootPanel.searchKeyOpen && MusicPlayer.spotify.clientId.length > 0
+							label: MusicPlayer.spotify.connecting ? "Waiting for the browser…" : "Sign in for search"
+							enabled: !MusicPlayer.spotify.connecting
+
+							onClicked:
+								MusicPlayer.spotify.connectSearch()
+						}
+					}
+				}
+
+				// Adding a link: pasted, named by Spotify, saved to the shelf and played.
+				Column
+				{
+					id: addSpotifyForm
+
+					anchors.top: spotifyTop.bottom
+					anchors.topMargin: 8
+					anchors.left: parent.left
+					anchors.right: parent.right
+
+					spacing: 10
+					visible: MusicPlayer.spotify.connected && !MusicPlayer.spotify.canSearch
+						&& rootPanel.addingSpotifyLink
+
+					property string foundUri: ""
+					property string foundTitle: ""
+					property string foundImage: ""
+					property string lookupError: ""
+					property bool looking: false
+
+					Connections
+					{
+						target: MusicPlayer.spotify
+
+						function onLinkLookedUp(uri, title, image, error)
+						{
+							addSpotifyForm.looking = false
+							addSpotifyForm.foundUri = uri
+							addSpotifyForm.foundTitle = title
+							addSpotifyForm.foundImage = image
+							addSpotifyForm.lookupError = error
+						}
+					}
+
+					Timer
+					{
+						id: spotifyLookupDelay
+						interval: 500
+						onTriggered: rootPanel.lookUpSpotifyLink(spotifyLinkField.text)
+					}
+
+					Text
+					{
+						width: parent.width
+						text: "In Spotify, open a playlist, album or song, choose Share, then Copy link, and paste it here."
+						color: Qt.rgba(1, 1, 1, 0.75)
+						font.pixelSize: 12
+						wrapMode: Text.WordWrap
+					}
+
+					SearchField
+					{
+						id: spotifyLinkField
+
+						width: parent.width
+						placeholderText: "https://open.spotify.com/…"
+						iconSource: "assets/icons/spotify.svg"
+
+						onTextEdited: spotifyLookupDelay.restart()
+						onSubmitted: (value) =>
+						{
+							spotifyLookupDelay.stop()
+							rootPanel.lookUpSpotifyLink(value)
+						}
+					}
+
+					Text
+					{
+						width: parent.width
+						visible: addSpotifyForm.looking || addSpotifyForm.lookupError.length > 0
+						text: addSpotifyForm.looking ? "Looking it up…" : addSpotifyForm.lookupError
+						textFormat: Text.PlainText
+						color: addSpotifyForm.lookupError.length > 0 ? "#ffb3b3" : Qt.rgba(1, 1, 1, 0.75)
+						font.pixelSize: 12
+						wrapMode: Text.WordWrap
+					}
+
+					// What was found, so it is clear what will be saved.
+					Row
+					{
+						width: parent.width
+						spacing: 10
+						visible: addSpotifyForm.foundUri.length > 0
+
+						Image
+						{
+							width: 48
+							height: 48
+							source: addSpotifyForm.foundImage
+							sourceSize.width: 96
+							sourceSize.height: 96
+							fillMode: Image.PreserveAspectCrop
+						}
+
+						Text
+						{
+							anchors.verticalCenter: parent.verticalCenter
+							width: parent.width - 58
+							text: addSpotifyForm.foundTitle
+							textFormat: Text.PlainText
+							color: "white"
+							font.pixelSize: 13
+							font.bold: true
+							wrapMode: Text.WordWrap
+						}
+					}
+
+					Row
+					{
+						anchors.right: parent.right
+						spacing: 8
+
+						Chip
+						{
+							label: "Cancel"
+							onClicked: rootPanel.closeSpotifyForm()
+						}
+
+						Chip
+						{
+							id: saveSpotifyBtn
+
+							label: "Save and play"
+							selected: saveSpotifyBtn.enabled
+							enabled: addSpotifyForm.foundUri.length > 0
+							opacity: saveSpotifyBtn.enabled ? 1.0 : 0.5
+
+							onClicked:
+							{
+								if (!saveSpotifyBtn.enabled)
+									return
+
+								rootPanel.spotifyAdded(addSpotifyForm.foundTitle, addSpotifyForm.foundUri,
+									addSpotifyForm.foundImage)
+								rootPanel.closeSpotifyForm()
+							}
+						}
+					}
 				}
 			}
 
@@ -1151,6 +1549,14 @@ Item
 
 	// True while the "add a station" form covers the station list.
 	property bool addingStation: false
+
+	// The same for the Spotify shelf's "add a link" form, and whether the developer-key
+	// section under the shelf is open.
+	property bool addingSpotifyLink: false
+	property bool searchKeyOpen: false
+
+	// The Client ID field lives in the shelf's footer, whose ids are out of reach here.
+	property bool searchKeyTyping: false
 
 	property bool youtubePlaylists: false
 	property string youtubeQuery: ""
@@ -1166,6 +1572,28 @@ Item
 			case "spotify": return "assets/icons/spotify.svg"
 			default: return "assets/icons/radio.svg"
 		}
+	}
+
+	function lookUpSpotifyLink(text)
+	{
+		addSpotifyForm.foundUri = ""
+		addSpotifyForm.lookupError = ""
+		addSpotifyForm.looking = text.trim().length > 0
+
+		if (addSpotifyForm.looking)
+			MusicPlayer.spotify.lookUpLink(text)
+	}
+
+	function closeSpotifyForm()
+	{
+		spotifyLookupDelay.stop()
+		spotifyLinkField.text = ""
+		addSpotifyForm.foundUri = ""
+		addSpotifyForm.foundTitle = ""
+		addSpotifyForm.foundImage = ""
+		addSpotifyForm.lookupError = ""
+		addSpotifyForm.looking = false
+		rootPanel.addingSpotifyLink = false
 	}
 
 	function closeStationForm()
@@ -1222,6 +1650,7 @@ Item
 	function fillSpotify()
 	{
 		if (rootPanel.open && rootPanel.source === "spotify" && MusicPlayer.spotify.connected
+			&& MusicPlayer.spotify.canSearch
 			&& !MusicPlayer.spotify.needsReconnect && rootPanel.spotifySection === "")
 		{
 			rootPanel.loadSpotify("playlists")

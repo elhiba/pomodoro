@@ -56,6 +56,9 @@ class AppSettings : public QObject
 	// { name, note, url }. JSON rather than a QVariantList so the registry holds
 	// readable text instead of a serialised QVariant blob.
 	Q_PROPERTY(QString customStations READ customStations WRITE setCustomStations NOTIFY customStationsChanged)
+	// Spotify links the user saved to the music panel's shelf, as a JSON array of
+	// { name, uri, image }, stored like customStations.
+	Q_PROPERTY(QString spotifySaved READ spotifySaved WRITE setSpotifySaved NOTIFY spotifySavedChanged)
 
 	// Handy for the settings panel, so the bounds live in one place instead of
 	// being repeated in QML.
@@ -124,6 +127,7 @@ class AppSettings : public QObject
 		QString	spotifyUri() const;
 		QString	spotifyClientId() const;
 		QString	customStations() const;
+		QString	spotifySaved() const;
 
 		int		minimumMinutes() const;
 		int		maximumMinutes() const;
@@ -152,6 +156,7 @@ class AppSettings : public QObject
 		void	setSpotifyUri(const QString &url);
 		void	setSpotifyClientId(const QString &url);
 		void	setCustomStations(const QString &value);
+		void	setSpotifySaved(const QString &value);
 
 	public slots:
 		void	restoreDefaults();
@@ -179,6 +184,7 @@ class AppSettings : public QObject
 		void	spotifyUriChanged();
 		void	spotifyClientIdChanged();
 		void	customStationsChanged();
+		void	spotifySavedChanged();
 
 	private:
 		QSettings	_store;
@@ -206,6 +212,7 @@ class AppSettings : public QObject
 		QString	_spotifyUri;
 		QString	_spotifyClientId;
 		QString	_customStations;
+		QString	_spotifySaved;
 
 		void	load();
 		void	store(const char *key, const QVariant &value);

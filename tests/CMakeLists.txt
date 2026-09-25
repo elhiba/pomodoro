@@ -42,6 +42,7 @@ qt_add_executable(tst_musicsources
 	tst_musicsources.cpp
 	../src/core/YtDlp.cpp
 	../src/core/SpotifyClient.cpp
+	../src/core/SpotifyEngine.cpp
 	../src/core/StationProbe.cpp
 )
 

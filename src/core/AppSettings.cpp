@@ -32,6 +32,7 @@ namespace
 	const char *const	KeySpotifyUri = "music/spotifyUri";
 	const char *const	KeySpotifyClientId = "spotify/clientId";
 	const char *const	KeyCustomStations = "music/customStations";
+	const char *const	KeySpotifySaved = "music/spotifySaved";
 }
 
 const QStringList	&AppSettings::musicSources()
@@ -179,6 +180,11 @@ QString	AppSettings::spotifyClientId() const
 QString	AppSettings::customStations() const
 {
 	return _customStations;
+}
+
+QString	AppSettings::spotifySaved() const
+{
+	return _spotifySaved;
 }
 
 int	AppSettings::minimumMinutes() const
@@ -465,6 +471,17 @@ void	AppSettings::setCustomStations(const QString &value)
 	emit customStationsChanged();
 }
 
+void	AppSettings::setSpotifySaved(const QString &value)
+{
+	if (_spotifySaved == value)
+		return;
+
+	_spotifySaved = value;
+	store(KeySpotifySaved, value);
+
+	emit spotifySavedChanged();
+}
+
 void	AppSettings::restoreDefaults()
 {
 	setFocusMinutes(DefaultFocusMinutes);
@@ -567,6 +584,7 @@ void	AppSettings::load()
 		_musicSource = QStringLiteral("radio");
 		store(KeyMusicSource, _musicSource);
 	}
+	_spotifySaved = _store.value(KeySpotifySaved, QStringLiteral("")).toString();
 }
 
 void	AppSettings::store(const char *key, const QVariant &value)
