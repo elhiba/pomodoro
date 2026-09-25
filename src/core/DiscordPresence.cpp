@@ -3,11 +3,17 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QDirIterator>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSettings>
 #include <QUuid>
 #include <QtEndian>
+
+#ifndef Q_OS_WIN
+#include <unistd.h>
+#endif
 
 #ifndef POMODORO_DISCORD_CLIENT_ID
 #define POMODORO_DISCORD_CLIENT_ID ""
@@ -17,8 +23,26 @@ namespace
 {
 	const char *const	KeyEnabled = "discord/enabled";
 
-	// Discord looks at ten pipes in turn; a second Discord (PTB, Canary) takes the next.
+	// Discord takes the first free of ten pipes; a second Discord (PTB, Canary) the next.
 	constexpr int	PipeCount = 10;
+
+#ifndef Q_OS_WIN
+	// Where a sandboxed Discord puts its socket, under the runtime directory: Flatpak
+	// keeps each app's in app/<id>, Snap in snap.<name>, and Vesktop's Flatpak in its own
+	// xdg-run. Checked by name first; anything else is found by the search below.
+	const char *const	SandboxFolders[] = {
+		"",
+		"app/com.discordapp.Discord",
+		"app/com.discordapp.DiscordCanary",
+		"app/com.discordapp.DiscordPTB",
+		"app/dev.vencord.Vesktop",
+		".flatpak/com.discordapp.Discord/xdg-run",
+		".flatpak/dev.vencord.Vesktop/xdg-run",
+		"snap.discord",
+		"snap.discord-canary",
+		"snap.discord-ptb"
+	};
+#endif
 }
 
 DiscordPresence::DiscordPresence(QObject *parent)
@@ -62,7 +86,8 @@ void	DiscordPresence::setEnabled(bool enabled)
 
 	if (_enabled)
 	{
-		_pipe = 0;
+		_target = 0;
+		_targets.clear();
 		connectToDiscord();
 	}
 	else
@@ -132,8 +157,25 @@ void	DiscordPresence::connectToDiscord()
 	if (!_enabled || !available() || _socket.state() != QLocalSocket::UnconnectedState)
 		return;
 
+	// A fresh look at the start of every round, so a Discord started (or moved into a
+	// sandbox) since the last round is found.
+	if (_target == 0)
+		_targets = findTargets();
+
+	if (_targets.isEmpty())
+	{
+		if (_error.isEmpty() || _ready)
+		{
+			_error.clear();
+			emit stateChanged();
+		}
+
+		_retryTimer.start();
+		return;
+	}
+
 	_buffer.clear();
-	_socket.connectToServer(pipeName(_pipe));
+	_socket.connectToServer(_targets.at(_target));
 }
 
 void	DiscordPresence::onConnected()
@@ -179,14 +221,14 @@ void	DiscordPresence::onDisconnected()
 		return;
 	}
 
-	// Next pipe straight away; once all ten are tried, wait and start over.
-	if (!wasReady && ++_pipe < PipeCount)
+	// Next place straight away; once all are tried, wait and start over.
+	if (!wasReady && ++_target < _targets.size())
 	{
 		QTimer::singleShot(0, this, &DiscordPresence::connectToDiscord);
 		return;
 	}
 
-	_pipe = 0;
+	_target = 0;
 	_retryTimer.start();
 
 	emit stateChanged();
@@ -363,23 +405,73 @@ QString	DiscordPresence::clientId()
 	return QString::fromUtf8(POMODORO_DISCORD_CLIENT_ID).trimmed();
 }
 
-// Windows: the named pipe \\.\pipe\discord-ipc-N, which QLocalSocket reaches by its bare
-// name. Elsewhere a socket file in the first of the usual runtime folders that is set.
-QString	DiscordPresence::pipeName(int index)
+// Every place a running Discord may be listening, most likely first.
+//
+// Windows: the named pipes \\.\pipe\discord-ipc-N, which QLocalSocket reaches by their
+// bare names; sandboxes do not move them.
+//
+// Elsewhere a socket file. A plain install puts it straight in the runtime directory, but
+// a Flatpak or Snap Discord -- the usual kind where people cannot install packages, as on
+// school machines -- puts it in its sandbox's own folder underneath. Those are checked by
+// name, then the runtime folders are searched a few levels deep for any discord-ipc-N at
+// all. Only files that exist are returned; none means Discord is not running, and the
+// caller tries again later.
+QStringList	DiscordPresence::findTargets()
 {
-	QString	name = QStringLiteral("discord-ipc-%1").arg(index);
+	QStringList	targets;
 
 #ifdef Q_OS_WIN
-	return name;
+	for (int index = 0; index < PipeCount; index++)
+		targets.append(QStringLiteral("discord-ipc-%1").arg(index));
 #else
+	QStringList	bases;
+
 	for (const char *variable : { "XDG_RUNTIME_DIR", "TMPDIR", "TMP", "TEMP" })
 	{
 		QString	folder = qEnvironmentVariable(variable);
 
 		if (!folder.isEmpty())
-			return QDir(folder).filePath(name);
+			bases.append(folder);
 	}
 
-	return QStringLiteral("/tmp/") + name;
+	bases.append(QStringLiteral("/run/user/%1").arg(getuid()));
+	bases.append(QStringLiteral("/tmp"));
+	bases.removeDuplicates();
+
+	auto	add = [&targets](const QString &path)
+	{
+		QFileInfo	info(path);
+
+		if (info.exists() && !info.isDir() && !targets.contains(info.absoluteFilePath()))
+			targets.append(info.absoluteFilePath());
+	};
+
+	for (const QString &base : std::as_const(bases))
+	{
+		for (const char *folder : SandboxFolders)
+		{
+			for (int index = 0; index < PipeCount; index++)
+				add(QDir(base).filePath(QLatin1String(folder) + QStringLiteral("/discord-ipc-%1").arg(index)));
+		}
+	}
+
+	// Anything else: a new sandbox layout, a renamed client. Bounded, so a crowded /tmp
+	// costs nothing noticeable.
+	for (const QString &base : std::as_const(bases))
+	{
+		QDirIterator	it(base, { QStringLiteral("discord-ipc-*") }, QDir::System | QDir::Files | QDir::Hidden,
+			QDirIterator::Subdirectories);
+		int				looked = 0;
+
+		while (it.hasNext() && looked++ < 4000)
+		{
+			QString	path = it.next();
+
+			if (QDir(base).relativeFilePath(path).count(QLatin1Char('/')) <= 4)
+				add(path);
+		}
+	}
 #endif
+
+	return targets;
 }

@@ -6,6 +6,7 @@
 #include <QLocalSocket>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 #include <QVariantMap>
 
@@ -79,7 +80,11 @@ class DiscordPresence : public QObject
 
 		bool	_enabled = false;
 		bool	_ready = false;
-		int		_pipe = 0;
+
+		// Where Discord might be listening, found afresh at the start of each round of
+		// attempts, and which of them is being tried.
+		QStringList	_targets;
+		int			_target = 0;
 		QString	_userName;
 		QString	_error;
 
@@ -99,8 +104,8 @@ class DiscordPresence : public QObject
 
 		QJsonObject	activityJson();
 
-		static QString	clientId();
-		static QString	pipeName(int index);
+		static QString		clientId();
+		static QStringList	findTargets();
 };
 
 #endif
