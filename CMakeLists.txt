@@ -95,6 +95,8 @@ qt_add_executable(pomodoro
 	src/core/StationProbe.cpp
 	src/core/SpotifyEngine.hpp
 	src/core/SpotifyEngine.cpp
+	src/core/AppFont.hpp
+	src/core/AppFont.cpp
 
 	src/core/MediaControls.hpp
 	src/core/MediaControls.cpp
@@ -205,6 +207,7 @@ set(POMODORO_QML_FILES
 	src/ui/SlimScrollBar.qml
 	src/ui/SquigglySlider.qml
 	src/ui/AnimatedClock.qml
+	src/ui/SectionHeader.qml
 	src/ui/MusicPanel.qml
 )
 

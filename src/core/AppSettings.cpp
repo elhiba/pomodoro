@@ -37,7 +37,8 @@ namespace
 	const char *const	KeyShortBreakColor = "appearance/shortBreakColor";
 	const char *const	KeyLongBreakColor = "appearance/longBreakColor";
 	const char *const	KeyTimerStyle = "appearance/timerStyle";
-	const char *const	KeyTimerFont = "appearance/timerFont";
+	const char *const	KeyFontOnTitle = "appearance/fontOnTitle";
+	const char *const	KeyAppFont = "appearance/font";
 }
 
 const QStringList	&AppSettings::musicSources()
@@ -212,9 +213,14 @@ QString	AppSettings::timerStyle() const
 	return _timerStyle;
 }
 
-QString	AppSettings::timerFont() const
+QString	AppSettings::appFont() const
 {
-	return _timerFont;
+	return _appFont;
+}
+
+bool	AppSettings::fontOnTitle() const
+{
+	return _fontOnTitle;
 }
 
 int	AppSettings::minimumMinutes() const
@@ -556,15 +562,26 @@ void	AppSettings::setTimerStyle(const QString &value)
 	emit timerStyleChanged();
 }
 
-void	AppSettings::setTimerFont(const QString &value)
+void	AppSettings::setAppFont(const QString &value)
 {
-	if (_timerFont == value)
+	if (_appFont == value)
 		return;
 
-	_timerFont = value;
-	store(KeyTimerFont, value);
+	_appFont = value;
+	store(KeyAppFont, value);
 
-	emit timerFontChanged();
+	emit appFontChanged();
+}
+
+void	AppSettings::setFontOnTitle(bool value)
+{
+	if (_fontOnTitle == value)
+		return;
+
+	_fontOnTitle = value;
+	store(KeyFontOnTitle, value);
+
+	emit fontOnTitleChanged();
 }
 
 void	AppSettings::restoreDefaults()
@@ -573,7 +590,8 @@ void	AppSettings::restoreDefaults()
 	setShortBreakColor(QString());
 	setLongBreakColor(QString());
 	setTimerStyle(QString());
-	setTimerFont(QString());
+	setAppFont(QString());
+	setFontOnTitle(DefaultFontOnTitle);
 
 	setFocusMinutes(DefaultFocusMinutes);
 	setShortBreakMinutes(DefaultShortBreakMinutes);
@@ -680,7 +698,8 @@ void	AppSettings::load()
 	_shortBreakColor = _store.value(KeyShortBreakColor, QStringLiteral("")).toString();
 	_longBreakColor = _store.value(KeyLongBreakColor, QStringLiteral("")).toString();
 	_timerStyle = _store.value(KeyTimerStyle, QStringLiteral("")).toString();
-	_timerFont = _store.value(KeyTimerFont, QStringLiteral("")).toString();
+	_appFont = _store.value(KeyAppFont, QStringLiteral("")).toString();
+	_fontOnTitle = _store.value(KeyFontOnTitle, DefaultFontOnTitle).toBool();
 }
 
 void	AppSettings::store(const char *key, const QVariant &value)

@@ -162,25 +162,30 @@ Item
 				width: body.availableWidth
 				spacing: 4
 
-				Text
+				SectionHeader
 				{
-					text: "TIMER"
-					color: Qt.rgba(1, 1, 1, 0.6)
-					font.pixelSize: 11
-					font.bold: true
-					font.letterSpacing: 1.2
-					bottomPadding: 6
+					id: sectionTimer
+
+					title: "TIMER"
+					expanded: true
 				}
 
-				NumberSetting
+				Column
 				{
-					label: "Rounds before long break"
-					value: AppSettings.roundsBeforeLongBreak
-					minimum: AppSettings.minimumRounds
-					maximum: AppSettings.maximumRounds
-					suffix: ""
+					width: parent.width
+					spacing: 4
+					visible: sectionTimer.expanded
 
-					onValueModified: (newValue) => AppSettings.roundsBeforeLongBreak = newValue
+					NumberSetting
+					{
+						label: "Rounds before long break"
+						value: AppSettings.roundsBeforeLongBreak
+						minimum: AppSettings.minimumRounds
+						maximum: AppSettings.maximumRounds
+						suffix: ""
+
+						onValueModified: (newValue) => AppSettings.roundsBeforeLongBreak = newValue
+					}
 				}
 
 				Rectangle
@@ -190,509 +195,629 @@ Item
 					color: Qt.rgba(1, 1, 1, 0.15)
 				}
 
-				Text
+				SectionHeader
 				{
-					text: "APPEARANCE"
-					color: Qt.rgba(1, 1, 1, 0.6)
-					font.pixelSize: 11
-					font.bold: true
-					font.letterSpacing: 1.2
-					topPadding: 14
-					bottomPadding: 6
+					id: sectionAppearance
+
+					title: "APPEARANCE"
+					expanded: false
 				}
 
-				// A colour for each kind of session. The first swatch is the built-in one.
-				ColorRow
+				Column
 				{
 					width: parent.width
-					label: "Focus"
-					value: AppSettings.focusColor
-					defaultColor: "#ba4949"
+					spacing: 4
+					visible: sectionAppearance.expanded
 
-					onPicked: (colour) => AppSettings.focusColor = colour
-				}
-
-				ColorRow
-				{
-					width: parent.width
-					label: "Short break"
-					value: AppSettings.shortBreakColor
-					defaultColor: "#38858a"
-
-					onPicked: (colour) => AppSettings.shortBreakColor = colour
-				}
-
-				ColorRow
-				{
-					width: parent.width
-					label: "Long break"
-					value: AppSettings.longBreakColor
-					defaultColor: "#397097"
-
-					onPicked: (colour) => AppSettings.longBreakColor = colour
-				}
-
-				Text
-				{
-					text: "Timer animation"
-					color: "white"
-					font.pixelSize: 15
-					topPadding: 12
-					bottomPadding: 6
-				}
-
-				// How the digits change; the timer behind the drawer shows it straight away.
-				Flow
-				{
-					width: parent.width
-					spacing: 6
-
-					Repeater
+					// Colours for each kind of session.
+					SectionHeader
 					{
-						model: [
+						id: coloursGroup
+
+						title: "Colours"
+						small: false
+						summary: AppSettings.focusColor.length + AppSettings.shortBreakColor.length
+							+ AppSettings.longBreakColor.length > 0 ? "Custom" : "Default"
+					}
+
+					Column
+					{
+						width: parent.width
+						visible: coloursGroup.expanded
+
+						ColorRow
+						{
+							width: parent.width
+							label: "Focus"
+							value: AppSettings.focusColor
+							defaultColor: "#ba4949"
+
+							onPicked: (colour) => AppSettings.focusColor = colour
+						}
+
+						ColorRow
+						{
+							width: parent.width
+							label: "Short break"
+							value: AppSettings.shortBreakColor
+							defaultColor: "#38858a"
+
+							onPicked: (colour) => AppSettings.shortBreakColor = colour
+						}
+
+						ColorRow
+						{
+							width: parent.width
+							label: "Long break"
+							value: AppSettings.longBreakColor
+							defaultColor: "#397097"
+
+							onPicked: (colour) => AppSettings.longBreakColor = colour
+						}
+					}
+
+					// How the digits change; the timer behind the drawer shows it straight away.
+					SectionHeader
+					{
+						id: animationGroup
+
+						readonly property var styles: [
 							{ key: "", label: "Still" },
 							{ key: "roll", label: "Rolling" },
 							{ key: "flip", label: "Flip" },
 							{ key: "soft", label: "Soft" }
 						]
 
-						delegate: OptionChip
+						title: "Timer animation"
+						small: false
+						summary: animationGroup.styles.find((style) => style.key === AppSettings.timerStyle)?.label ?? "Still"
+					}
+
+					Flow
+					{
+						width: parent.width
+						spacing: 6
+						bottomPadding: 10
+						visible: animationGroup.expanded
+
+						Repeater
 						{
-							required property var modelData
+							model: animationGroup.styles
 
-							label: modelData.label
-							selected: AppSettings.timerStyle === modelData.key
+							delegate: OptionChip
+							{
+								required property var modelData
 
-							onClicked: AppSettings.timerStyle = modelData.key
+								label: modelData.label
+								selected: AppSettings.timerStyle === modelData.key
+
+								onClicked: AppSettings.timerStyle = modelData.key
+							}
+						}
+					}
+
+					// The font for the whole app, timer included.
+					SectionHeader
+					{
+						id: fontGroup
+
+						title: "Font"
+						small: false
+						summary: AppSettings.appFont.length > 0 ? AppSettings.appFont : "Default"
+					}
+
+					Column
+					{
+						width: parent.width
+						spacing: 8
+						bottomPadding: 10
+						visible: fontGroup.expanded
+
+						TextField
+						{
+							id: fontSearch
+
+							width: parent.width
+							height: 36
+							leftPadding: 12
+							rightPadding: 12
+
+							placeholderText: "Search fonts"
+							placeholderTextColor: Qt.rgba(1, 1, 1, 0.45)
+							color: "white"
+							font.pixelSize: 14
+							selectByMouse: true
+
+							background: Rectangle
+							{
+								radius: 10
+								color: Qt.rgba(0, 0, 0, 0.2)
+								border.color: fontSearch.activeFocus ? Qt.rgba(1, 1, 1, 0.5) : Qt.rgba(1, 1, 1, 0.18)
+							}
+						}
+
+						// Every font on the computer, each written in itself; installing a new
+						// one in the system makes it appear here. "Default" is the system font,
+						// with JetBrains Mono for the timer.
+						Rectangle
+						{
+							width: parent.width
+							height: 250
+							radius: 10
+							color: Qt.rgba(0, 0, 0, 0.18)
+							clip: true
+
+							ListView
+							{
+								id: fontList
+
+								anchors.fill: parent
+								anchors.margins: 4
+
+								boundsBehavior: Flickable.StopAtBounds
+								spacing: 2
+
+								model:
+								{
+									let wanted = fontSearch.text.trim().toLowerCase()
+
+									// "@" names are the vertical variants of CJK fonts: not for us.
+									let families = Qt.fontFamilies().filter((family) =>
+										!family.startsWith("@") && family.toLowerCase().includes(wanted))
+
+									return wanted.length > 0 ? families : [""].concat(families)
+								}
+
+								ScrollBar.vertical: SlimScrollBar {}
+
+								delegate: Rectangle
+								{
+									id: fontRow
+
+									required property var modelData
+
+									readonly property bool chosen: AppSettings.appFont === fontRow.modelData
+
+									width: fontList.width - 8
+									height: 38
+									radius: 8
+
+									color: fontRow.chosen
+										? Qt.rgba(1, 1, 1, 0.22)
+										: fontRowHover.hovered ? Qt.rgba(1, 1, 1, 0.1) : "transparent"
+
+									Text
+									{
+										anchors.left: parent.left
+										anchors.leftMargin: 12
+										anchors.right: fontCheck.left
+										anchors.rightMargin: 8
+										anchors.verticalCenter: parent.verticalCenter
+
+										// Shown in itself; its own font, so AppFont leaves it be.
+										property bool ownFont: true
+
+										text: fontRow.modelData.length > 0 ? fontRow.modelData : "Default"
+										font.family: fontRow.modelData.length > 0 ? fontRow.modelData : font.family
+										font.pixelSize: 16
+										color: "white"
+										elide: Text.ElideRight
+									}
+
+									Text
+									{
+										id: fontCheck
+
+										anchors.right: parent.right
+										anchors.rightMargin: 12
+										anchors.verticalCenter: parent.verticalCenter
+
+										visible: fontRow.chosen
+										text: "✓"
+										color: "white"
+										font.pixelSize: 16
+										font.bold: true
+									}
+
+									HoverHandler
+									{
+										id: fontRowHover
+										cursorShape: Qt.PointingHandCursor
+									}
+
+									TapHandler
+									{
+										onTapped: AppSettings.appFont = fontRow.modelData
+									}
+								}
+							}
+						}
+
+						ToggleSetting
+						{
+							label: "Use it for the Pomodoro title"
+							checked: AppSettings.fontOnTitle
+							accentColor: rootPanel.themeColor
+
+							onToggleRequested: (wanted) => AppSettings.fontOnTitle = wanted
 						}
 					}
 				}
 
-				Text
+				Rectangle
 				{
-					text: "Timer font"
-					color: "white"
-					font.pixelSize: 15
-					topPadding: 12
-					bottomPadding: 6
+					width: parent.width
+					height: 1
+					color: Qt.rgba(1, 1, 1, 0.15)
 				}
 
-				// Every font installed on this computer, each shown in itself. Installing a
-				// new font in the system makes it appear here.
-				ComboBox
+				SectionHeader
 				{
-					id: fontBox
+					id: sectionAutomation
 
+					title: "AUTOMATION"
+					expanded: false
+				}
+
+				Column
+				{
 					width: parent.width
-					height: 38
+					spacing: 4
+					visible: sectionAutomation.expanded
 
-					readonly property var families: ["JetBrains Mono (built in)"].concat(Qt.fontFamilies())
-
-					model: fontBox.families
-					currentIndex: AppSettings.timerFont.length > 0
-						? Math.max(0, fontBox.families.indexOf(AppSettings.timerFont))
-						: 0
-
-					onActivated: (index) => AppSettings.timerFont = index === 0 ? "" : fontBox.families[index]
-
-					background: Rectangle
+					ToggleSetting
 					{
-						radius: 10
-						color: Qt.rgba(0, 0, 0, 0.2)
-						border.color: fontBox.hovered ? Qt.rgba(1, 1, 1, 0.5) : Qt.rgba(1, 1, 1, 0.2)
-						border.width: 1
+						label: "Start breaks automatically"
+						checked: AppSettings.autoStartBreaks
+						accentColor: rootPanel.themeColor
+
+						onToggleRequested: (wanted) => AppSettings.autoStartBreaks = wanted
 					}
 
-					contentItem: Text
+					ToggleSetting
 					{
-						leftPadding: 12
-						rightPadding: 30
-						verticalAlignment: Text.AlignVCenter
-						text: fontBox.displayText
-						color: "white"
-						font.pixelSize: 14
-						font.family: fontBox.currentIndex > 0 ? fontBox.displayText : font.family
-						elide: Text.ElideRight
+						label: "Start focus automatically"
+						checked: AppSettings.autoStartFocus
+						accentColor: rootPanel.themeColor
+
+						onToggleRequested: (wanted) => AppSettings.autoStartFocus = wanted
+					}
+				}
+
+				Rectangle
+				{
+					width: parent.width
+					height: 1
+					color: Qt.rgba(1, 1, 1, 0.15)
+				}
+
+				SectionHeader
+				{
+					id: sectionTasks
+
+					title: "TASKS"
+					expanded: false
+				}
+
+				Column
+				{
+					width: parent.width
+					spacing: 4
+					visible: sectionTasks.expanded
+
+					ToggleSetting
+					{
+						label: "Show the task list"
+						checked: AppSettings.tasksEnabled
+						accentColor: rootPanel.themeColor
+
+						onToggleRequested: (wanted) => AppSettings.tasksEnabled = wanted
+					}
+				}
+
+				Rectangle
+				{
+					width: parent.width
+					height: 1
+					color: Qt.rgba(1, 1, 1, 0.15)
+				}
+
+				SectionHeader
+				{
+					id: sectionSound
+
+					title: "SOUND"
+					expanded: false
+				}
+
+				Column
+				{
+					width: parent.width
+					spacing: 4
+					visible: sectionSound.expanded
+
+					SliderSetting
+					{
+						label: "Alarm volume"
+						value: AppSettings.alarmVolume
+
+						onValueModified: (newValue) => AppSettings.alarmVolume = newValue
+						onPreviewRequested: SoundPlayer.playAlarm()
+					}
+				}
+
+				Rectangle
+				{
+					width: parent.width
+					height: 1
+					color: Qt.rgba(1, 1, 1, 0.15)
+				}
+
+				SectionHeader
+				{
+					id: sectionWindow
+
+					title: "WINDOW"
+					expanded: false
+				}
+
+				Column
+				{
+					width: parent.width
+					spacing: 4
+					visible: sectionWindow.expanded
+
+					ToggleSetting
+					{
+						label: "Floating timer when minimised"
+						checked: AppSettings.miniTimer
+						accentColor: rootPanel.themeColor
+
+						onToggleRequested: (wanted) => AppSettings.miniTimer = wanted
 					}
 
-					delegate: ItemDelegate
+					ToggleSetting
 					{
-						id: fontItem
+						label: "Close button hides to the tray"
+						checked: AppSettings.closeMinimizes
+						accentColor: rootPanel.themeColor
 
-						required property var modelData
-						required property int index
+						onToggleRequested: (wanted) => AppSettings.closeMinimizes = wanted
+					}
 
-						width: fontBox.width
-						height: 34
-						highlighted: fontBox.highlightedIndex === fontItem.index
+					Text
+					{
+						width: parent.width
+						bottomPadding: 6
+
+						text:
+						{
+							if (!AppSettings.closeMinimizes)
+								return "Closing quits pomodoro and ends the current session."
+
+							if (TrayIcon.available)
+								return "Closing puts pomodoro in the system tray with the timer still running. Click the tray icon to bring it back, or use its menu."
+
+							// Said plainly rather than hidden, because the fallback behaves
+							// differently from what the switch above describes.
+							return "This desktop has no system tray, so closing will minimise the window instead. On GNOME a tray needs the AppIndicator extension."
+						}
+
+						color: TrayIcon.available || !AppSettings.closeMinimizes
+							? Qt.rgba(1, 1, 1, 0.5)
+							: "#ffcf8a"
+
+						font.pixelSize: 11
+						wrapMode: Text.WordWrap
+					}
+				}
+
+				Rectangle
+				{
+					width: parent.width
+					height: 1
+					color: Qt.rgba(1, 1, 1, 0.15)
+				}
+
+				SectionHeader
+				{
+					id: sectionAbout
+
+					title: "ABOUT"
+					expanded: false
+				}
+
+				Column
+				{
+					width: parent.width
+					spacing: 4
+					visible: sectionAbout.expanded
+
+					Text
+					{
+						width: parent.width
+						bottomPadding: 8
+
+						text: UpdateChecker.statusText
+						color: UpdateChecker.updateAvailable
+							? "#b6f0b6"
+							: UpdateChecker.status === UpdateChecker.Failed
+								? "#ff8a8a"
+								: Qt.rgba(1, 1, 1, 0.6)
+
+						font.pixelSize: 12
+						wrapMode: Text.WordWrap
+					}
+
+					// One button with two jobs: it looks for a newer release, and once it has
+					// found one it becomes the way to install it -- in place where this copy
+					// knows how to replace itself, through the release page where it does not.
+					Button
+					{
+						id: updateBtn
+
+						width: parent.width
+						height: 40
+
+						enabled: !UpdateChecker.busy
+						opacity: updateBtn.enabled ? 1.0 : 0.5
+
+						background: Rectangle
+						{
+							radius: 8
+							color: UpdateChecker.updateAvailable
+								? Qt.rgba(0.36, 0.67, 0.36, updateBtn.hovered ? 0.55 : 0.4)
+								: updateBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(1, 1, 1, 0.1)
+
+							border.color: Qt.rgba(1, 1, 1, 0.25)
+							border.width: 1
+
+							Behavior on color
+							{
+								ColorAnimation { duration: 150 }
+							}
+						}
 
 						contentItem: Text
 						{
-							text: fontItem.modelData
+							text:
+							{
+								if (UpdateChecker.status === UpdateChecker.Checking)
+									return "Checking…"
+
+								if (UpdateChecker.status === UpdateChecker.Downloading)
+									return "Downloading… " + Math.round(UpdateChecker.downloadProgress * 100) + "%"
+
+								if (!UpdateChecker.updateAvailable)
+									return "Check for updates"
+
+								return UpdateChecker.canInstall
+									? "Update to " + UpdateChecker.latestVersion
+									: "Get version " + UpdateChecker.latestVersion
+							}
+
+							color: "white"
 							font.pixelSize: 14
-							font.family: fontItem.index > 0 ? fontItem.modelData : font.family
-							color: "#222222"
-							elide: Text.ElideRight
+
+							horizontalAlignment: Text.AlignHCenter
 							verticalAlignment: Text.AlignVCenter
 						}
-					}
 
-					popup.height: Math.min(360, fontBox.families.length * 34 + 8)
-				}
-
-				Rectangle
-				{
-					width: parent.width
-					height: 1
-					color: Qt.rgba(1, 1, 1, 0.15)
-				}
-
-				Text
-				{
-					text: "AUTOMATION"
-					color: Qt.rgba(1, 1, 1, 0.6)
-					font.pixelSize: 11
-					font.bold: true
-					font.letterSpacing: 1.2
-					topPadding: 14
-					bottomPadding: 6
-				}
-
-				ToggleSetting
-				{
-					label: "Start breaks automatically"
-					checked: AppSettings.autoStartBreaks
-					accentColor: rootPanel.themeColor
-
-					onToggleRequested: (wanted) => AppSettings.autoStartBreaks = wanted
-				}
-
-				ToggleSetting
-				{
-					label: "Start focus automatically"
-					checked: AppSettings.autoStartFocus
-					accentColor: rootPanel.themeColor
-
-					onToggleRequested: (wanted) => AppSettings.autoStartFocus = wanted
-				}
-
-				Rectangle
-				{
-					width: parent.width
-					height: 1
-					color: Qt.rgba(1, 1, 1, 0.15)
-				}
-
-				Text
-				{
-					text: "TASKS"
-					color: Qt.rgba(1, 1, 1, 0.6)
-					font.pixelSize: 11
-					font.bold: true
-					font.letterSpacing: 1.2
-					topPadding: 14
-					bottomPadding: 6
-				}
-
-				ToggleSetting
-				{
-					label: "Show the task list"
-					checked: AppSettings.tasksEnabled
-					accentColor: rootPanel.themeColor
-
-					onToggleRequested: (wanted) => AppSettings.tasksEnabled = wanted
-				}
-
-				Rectangle
-				{
-					width: parent.width
-					height: 1
-					color: Qt.rgba(1, 1, 1, 0.15)
-				}
-
-				Text
-				{
-					text: "SOUND"
-					color: Qt.rgba(1, 1, 1, 0.6)
-					font.pixelSize: 11
-					font.bold: true
-					font.letterSpacing: 1.2
-					topPadding: 14
-					bottomPadding: 6
-				}
-
-				SliderSetting
-				{
-					label: "Alarm volume"
-					value: AppSettings.alarmVolume
-
-					onValueModified: (newValue) => AppSettings.alarmVolume = newValue
-					onPreviewRequested: SoundPlayer.playAlarm()
-				}
-
-				Rectangle
-				{
-					width: parent.width
-					height: 1
-					color: Qt.rgba(1, 1, 1, 0.15)
-				}
-
-				Text
-				{
-					text: "WINDOW"
-					color: Qt.rgba(1, 1, 1, 0.6)
-					font.pixelSize: 11
-					font.bold: true
-					font.letterSpacing: 1.2
-					topPadding: 14
-					bottomPadding: 6
-				}
-
-				ToggleSetting
-				{
-					label: "Floating timer when minimised"
-					checked: AppSettings.miniTimer
-					accentColor: rootPanel.themeColor
-
-					onToggleRequested: (wanted) => AppSettings.miniTimer = wanted
-				}
-
-				ToggleSetting
-				{
-					label: "Close button hides to the tray"
-					checked: AppSettings.closeMinimizes
-					accentColor: rootPanel.themeColor
-
-					onToggleRequested: (wanted) => AppSettings.closeMinimizes = wanted
-				}
-
-				Text
-				{
-					width: parent.width
-					bottomPadding: 6
-
-					text:
-					{
-						if (!AppSettings.closeMinimizes)
-							return "Closing quits pomodoro and ends the current session."
-
-						if (TrayIcon.available)
-							return "Closing puts pomodoro in the system tray with the timer still running. Click the tray icon to bring it back, or use its menu."
-
-						// Said plainly rather than hidden, because the fallback behaves
-						// differently from what the switch above describes.
-						return "This desktop has no system tray, so closing will minimise the window instead. On GNOME a tray needs the AppIndicator extension."
-					}
-
-					color: TrayIcon.available || !AppSettings.closeMinimizes
-						? Qt.rgba(1, 1, 1, 0.5)
-						: "#ffcf8a"
-
-					font.pixelSize: 11
-					wrapMode: Text.WordWrap
-				}
-
-				Rectangle
-				{
-					width: parent.width
-					height: 1
-					color: Qt.rgba(1, 1, 1, 0.15)
-				}
-
-				Text
-				{
-					text: "ABOUT"
-					color: Qt.rgba(1, 1, 1, 0.6)
-					font.pixelSize: 11
-					font.bold: true
-					font.letterSpacing: 1.2
-					topPadding: 14
-					bottomPadding: 6
-				}
-
-				Text
-				{
-					width: parent.width
-					bottomPadding: 8
-
-					text: UpdateChecker.statusText
-					color: UpdateChecker.updateAvailable
-						? "#b6f0b6"
-						: UpdateChecker.status === UpdateChecker.Failed
-							? "#ff8a8a"
-							: Qt.rgba(1, 1, 1, 0.6)
-
-					font.pixelSize: 12
-					wrapMode: Text.WordWrap
-				}
-
-				// One button with two jobs: it looks for a newer release, and once it has
-				// found one it becomes the way to install it -- in place where this copy
-				// knows how to replace itself, through the release page where it does not.
-				Button
-				{
-					id: updateBtn
-
-					width: parent.width
-					height: 40
-
-					enabled: !UpdateChecker.busy
-					opacity: updateBtn.enabled ? 1.0 : 0.5
-
-					background: Rectangle
-					{
-						radius: 8
-						color: UpdateChecker.updateAvailable
-							? Qt.rgba(0.36, 0.67, 0.36, updateBtn.hovered ? 0.55 : 0.4)
-							: updateBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(1, 1, 1, 0.1)
-
-						border.color: Qt.rgba(1, 1, 1, 0.25)
-						border.width: 1
-
-						Behavior on color
+						onClicked:
 						{
-							ColorAnimation { duration: 150 }
+							SoundPlayer.playClick()
+
+							if (UpdateChecker.updateAvailable)
+								UpdateChecker.installUpdate()
+							else
+								UpdateChecker.check()
 						}
 					}
 
-					contentItem: Text
+					Item
 					{
-						text:
+						width: 1
+						height: 16
+					}
+
+					Button
+					{
+						id: quitBtn
+
+						property bool armed: false
+
+						width: parent.width
+						height: 40
+
+						background: Rectangle
 						{
-							if (UpdateChecker.status === UpdateChecker.Checking)
-								return "Checking…"
+							radius: 8
+							color: quitBtn.armed
+								? "#d91629"
+								: quitBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(1, 1, 1, 0.1)
 
-							if (UpdateChecker.status === UpdateChecker.Downloading)
-								return "Downloading… " + Math.round(UpdateChecker.downloadProgress * 100) + "%"
+							border.color: Qt.rgba(1, 1, 1, 0.25)
+							border.width: 1
 
-							if (!UpdateChecker.updateAvailable)
-								return "Check for updates"
-
-							return UpdateChecker.canInstall
-								? "Update to " + UpdateChecker.latestVersion
-								: "Get version " + UpdateChecker.latestVersion
+							Behavior on color
+							{
+								ColorAnimation { duration: 150 }
+							}
 						}
 
-						color: "white"
-						font.pixelSize: 14
-
-						horizontalAlignment: Text.AlignHCenter
-						verticalAlignment: Text.AlignVCenter
-					}
-
-					onClicked:
-					{
-						SoundPlayer.playClick()
-
-						if (UpdateChecker.updateAvailable)
-							UpdateChecker.installUpdate()
-						else
-							UpdateChecker.check()
-					}
-				}
-
-				Item
-				{
-					width: 1
-					height: 16
-				}
-
-				Button
-				{
-					id: quitBtn
-
-					property bool armed: false
-
-					width: parent.width
-					height: 40
-
-					background: Rectangle
-					{
-						radius: 8
-						color: quitBtn.armed
-							? "#d91629"
-							: quitBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(1, 1, 1, 0.1)
-
-						border.color: Qt.rgba(1, 1, 1, 0.25)
-						border.width: 1
-
-						Behavior on color
+						contentItem: Text
 						{
-							ColorAnimation { duration: 150 }
+							text: quitBtn.armed ? "Really quit?" : "Quit pomodoro"
+							color: "white"
+							font.pixelSize: 14
+
+							horizontalAlignment: Text.AlignHCenter
+							verticalAlignment: Text.AlignVCenter
+						}
+
+						// Two step, because quitting mid session throws that session away.
+						onClicked:
+						{
+							if (quitBtn.armed)
+								Qt.quit()
+							else
+							{
+								quitBtn.armed = true
+								disarmQuit.restart()
+							}
+						}
+
+						Timer
+						{
+							id: disarmQuit
+							interval: 4000
+
+							onTriggered:
+								quitBtn.armed = false
 						}
 					}
 
-					contentItem: Text
+					Item
 					{
-						text: quitBtn.armed ? "Really quit?" : "Quit pomodoro"
-						color: "white"
-						font.pixelSize: 14
-
-						horizontalAlignment: Text.AlignHCenter
-						verticalAlignment: Text.AlignVCenter
+						width: 1
+						height: 16
 					}
 
-					// Two step, because quitting mid session throws that session away.
-					onClicked:
+					Button
 					{
-						if (quitBtn.armed)
-							Qt.quit()
-						else
+						id: defaultsBtn
+
+						width: parent.width
+						height: 40
+
+						background: Rectangle
 						{
-							quitBtn.armed = true
-							disarmQuit.restart()
+							radius: 8
+							color: defaultsBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(1, 1, 1, 0.1)
+							border.color: Qt.rgba(1, 1, 1, 0.25)
+							border.width: 1
+
+							Behavior on color
+							{
+								ColorAnimation { duration: 150 }
+							}
 						}
-					}
 
-					Timer
-					{
-						id: disarmQuit
-						interval: 4000
-
-						onTriggered:
-							quitBtn.armed = false
-					}
-				}
-
-				Item
-				{
-					width: 1
-					height: 16
-				}
-
-				Button
-				{
-					id: defaultsBtn
-
-					width: parent.width
-					height: 40
-
-					background: Rectangle
-					{
-						radius: 8
-						color: defaultsBtn.hovered ? Qt.rgba(1, 1, 1, 0.2) : Qt.rgba(1, 1, 1, 0.1)
-						border.color: Qt.rgba(1, 1, 1, 0.25)
-						border.width: 1
-
-						Behavior on color
+						contentItem: Text
 						{
-							ColorAnimation { duration: 150 }
+							text: "Restore defaults"
+							color: "white"
+							font.pixelSize: 14
+
+							horizontalAlignment: Text.AlignHCenter
+							verticalAlignment: Text.AlignVCenter
 						}
+
+						onClicked:
+							AppSettings.restoreDefaults()
 					}
-
-					contentItem: Text
-					{
-						text: "Restore defaults"
-						color: "white"
-						font.pixelSize: 14
-
-						horizontalAlignment: Text.AlignHCenter
-						verticalAlignment: Text.AlignVCenter
-					}
-
-					onClicked:
-						AppSettings.restoreDefaults()
 				}
+
 			}
 		}
 	}

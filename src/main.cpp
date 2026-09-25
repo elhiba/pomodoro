@@ -1,12 +1,16 @@
 #include <QApplication>
 #include <QDir>
+#include <QFont>
 #include <QIcon>
 #include <QLockFile>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QSettings>
 #include <QStandardPaths>
 
+#include "AppFont.hpp"
+#include "AppSettings.hpp"
 #include "InstanceBridge.hpp"
 
 #if defined(Q_OS_WIN) || defined(Q_OS_LINUX)
@@ -106,6 +110,12 @@ int main(int ac, char **av)
 	if (qEnvironmentVariableIsEmpty("QT_QUICK_BACKEND"))
 		QQuickWindow::setGraphicsApi(QSGRendererInterface::Software);
 
+	// The font chosen in the settings goes on before the first window is built; AppFont,
+	// below, carries later changes to what is already on screen.
+	QString	systemFamily = QGuiApplication::font().family();
+
+	AppFont::applyAtStartup(QSettings().value(QStringLiteral("appearance/font")).toString());
+
 	QQmlApplicationEngine	engine;
 
 	QObject::connect(
@@ -115,6 +125,8 @@ int main(int ac, char **av)
 	);
 
 	engine.loadFromModule("Pomodoro", "Main");
+
+	AppFont	appFont(engine.singletonInstance<AppSettings *>("Pomodoro", "AppSettings"), systemFamily);
 
 	return pomodoro.exec();
 }

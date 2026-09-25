@@ -85,24 +85,40 @@ Item
 				context.fill()
 			}
 
-			// The wave: two slow sines of different lengths, so the hills are uneven like
-			// the ones in One UI, fading to nothing at both ends of the played part.
+			// The wave: at most two soft hills, never a row of ripples. Each is a bell whose
+			// place and height drift a little while the music plays; a short played part
+			// gets one. Added together they make one smooth outline, pinned to the track
+			// at both ends of the played part.
 			let peak = (top - 1) * rootSlider.amplitude
+			let played = marker - inset
 
-			if (peak > 0.5 && marker - inset > 8)
+			if (peak > 0.5 && played > 12)
 			{
+				let phase = rootSlider.phase
+				let hills = played < 140
+					? [{ at: 0.5 + 0.06 * Math.sin(phase), height: 0.85 + 0.15 * Math.sin(phase * 1.3), width: 0.24 }]
+					: [{ at: 0.3 + 0.06 * Math.sin(phase), height: 0.8 + 0.2 * Math.sin(phase * 1.3), width: 0.15 },
+						{ at: 0.72 + 0.06 * Math.sin(phase * 0.8 + 1), height: 0.6 + 0.25 * Math.sin(phase * 0.9 + 2), width: 0.13 }]
+
 				context.fillStyle = Qt.rgba(1, 1, 1, 0.3)
 				context.beginPath()
 				context.moveTo(inset, top + 1)
 
 				for (let x = inset; x <= marker; x += 2)
 				{
-					let along = (x - inset) / Math.max(1, marker - inset)
-					let taper = Math.sin(Math.PI * along)
-					let wave = 0.55 + 0.25 * Math.sin(x / 38 - rootSlider.phase)
-						+ 0.2 * Math.sin(x / 17 + rootSlider.phase * 1.7)
+					let along = (x - inset) / played
+					let rise = 0
 
-					context.lineTo(x, top + 1 - peak * taper * wave)
+					for (let hill of hills)
+					{
+						let distance = (along - hill.at) / hill.width
+						rise += hill.height * Math.exp(-distance * distance)
+					}
+
+					// Down to the track at both ends, and never above the tallest hill.
+					rise = Math.min(1, rise) * Math.sin(Math.PI * along)
+
+					context.lineTo(x, top + 1 - peak * rise)
 				}
 
 				context.lineTo(marker, top + 1)

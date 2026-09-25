@@ -20,7 +20,7 @@ Window
 	signal restoreRequested()
 
 	// Sized from the digits, so a longer session ("100:00") or a wider font still fits.
-	readonly property int wantedWidth: Math.max(168, Math.ceil(timeLabel.implicitWidth) + 64)
+	readonly property int wantedWidth: Math.max(168, Math.ceil(timeLabel.implicitWidth) + 72)
 	readonly property int wantedHeight: 60
 
 	width: rootMini.wantedWidth
@@ -112,18 +112,29 @@ Window
 			opacity: rootMini.timer.state === PomodoroTimer.Running ? 0.95 : 0.35
 		}
 
+		// Measures the digits for the window's size; the clock below draws them, with
+		// the same animation as the main window's.
 		Text
 		{
 			id: timeLabel
 
+			property bool ownFont: true
+
+			visible: false
+			text: rootMini.timer.displayTime
+			font.family: AppSettings.appFont.length > 0 ? AppSettings.appFont : timerFont.name
+			font.pixelSize: 30
+			font.bold: true
+		}
+
+		AnimatedClock
+		{
 			anchors.centerIn: parent
 			anchors.horizontalCenterOffset: 8
 
 			text: rootMini.timer.displayTime
-			color: "white"
-			font.family: AppSettings.timerFont.length > 0 ? AppSettings.timerFont : timerFont.name
-			font.pixelSize: 30
-			font.bold: true
+			font: timeLabel.font
+			style: AppSettings.timerStyle
 		}
 
 		// The same progress as the main window's bar, along the bottom edge.

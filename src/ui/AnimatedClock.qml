@@ -22,6 +22,9 @@ Row
 	property color color: "white"
 	property string style: ""
 
+	// Follows its font binding; AppFont leaves it alone.
+	property bool ownFont: true
+
 	FontMetrics
 	{
 		id: metrics

@@ -60,13 +60,16 @@ class AppSettings : public QObject
 	// { name, uri, image }, stored like customStations.
 	Q_PROPERTY(QString spotifySaved READ spotifySaved WRITE setSpotifySaved NOTIFY spotifySavedChanged)
 	// Appearance. Colours are "#rrggbb" per session kind, empty for the built-in one;
-	// timerStyle is how the digits change ("" = still, "roll", "flip", "soft"); timerFont
-	// is a font family, empty for the bundled JetBrains Mono.
+	// timerStyle is how the digits change ("" = still, "roll", "flip", "soft"); appFont is
+	// the font family for the whole app, timer included, empty for the built-in ones
+	// (JetBrains Mono for the timer, the system font elsewhere). fontOnTitle puts it on
+	// the "Pomodoro" title too, which otherwise keeps its script font.
 	Q_PROPERTY(QString focusColor READ focusColor WRITE setFocusColor NOTIFY focusColorChanged)
 	Q_PROPERTY(QString shortBreakColor READ shortBreakColor WRITE setShortBreakColor NOTIFY shortBreakColorChanged)
 	Q_PROPERTY(QString longBreakColor READ longBreakColor WRITE setLongBreakColor NOTIFY longBreakColorChanged)
 	Q_PROPERTY(QString timerStyle READ timerStyle WRITE setTimerStyle NOTIFY timerStyleChanged)
-	Q_PROPERTY(QString timerFont READ timerFont WRITE setTimerFont NOTIFY timerFontChanged)
+	Q_PROPERTY(QString appFont READ appFont WRITE setAppFont NOTIFY appFontChanged)
+	Q_PROPERTY(bool fontOnTitle READ fontOnTitle WRITE setFontOnTitle NOTIFY fontOnTitleChanged)
 
 	// Handy for the settings panel, so the bounds live in one place instead of
 	// being repeated in QML.
@@ -95,6 +98,7 @@ class AppSettings : public QObject
 		static constexpr int	DefaultMiniTimerX = -1;
 		static constexpr int	DefaultMiniTimerY = -1;
 		static constexpr bool	DefaultTasksEnabled = true;
+		static constexpr bool	DefaultFontOnTitle = false;
 
 		static constexpr int	MinimumMinutes = 1;
 		static constexpr int	MaximumMinutes = 120;
@@ -140,7 +144,8 @@ class AppSettings : public QObject
 		QString	shortBreakColor() const;
 		QString	longBreakColor() const;
 		QString	timerStyle() const;
-		QString	timerFont() const;
+		QString	appFont() const;
+		bool	fontOnTitle() const;
 
 		int		minimumMinutes() const;
 		int		maximumMinutes() const;
@@ -174,7 +179,8 @@ class AppSettings : public QObject
 		void	setShortBreakColor(const QString &value);
 		void	setLongBreakColor(const QString &value);
 		void	setTimerStyle(const QString &value);
-		void	setTimerFont(const QString &value);
+		void	setAppFont(const QString &value);
+		void	setFontOnTitle(bool value);
 
 	public slots:
 		void	restoreDefaults();
@@ -207,7 +213,8 @@ class AppSettings : public QObject
 		void	shortBreakColorChanged();
 		void	longBreakColorChanged();
 		void	timerStyleChanged();
-		void	timerFontChanged();
+		void	appFontChanged();
+		void	fontOnTitleChanged();
 
 	private:
 		QSettings	_store;
@@ -240,7 +247,8 @@ class AppSettings : public QObject
 		QString	_shortBreakColor;
 		QString	_longBreakColor;
 		QString	_timerStyle;
-		QString	_timerFont;
+		QString	_appFont;
+		bool	_fontOnTitle = DefaultFontOnTitle;
 
 		void	load();
 		void	store(const char *key, const QVariant &value);

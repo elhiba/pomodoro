@@ -143,6 +143,9 @@ Item
 					width: Math.max(timeText.implicitWidth, clock.width)
 					height: timeText.implicitHeight
 
+					// The digits and the minutes field bind their font to the setting.
+					property bool ownFont: true
+
 					// Measures and sizes the clock, and is what the typed-minutes field
 					// copies its font from; the digits on screen are the AnimatedClock.
 					Text
@@ -154,7 +157,7 @@ Item
 						text: rootTimer.timer.displayTime
 						color: "white"
 						opacity: 0
-						font.family: AppSettings.timerFont.length > 0 ? AppSettings.timerFont : timerFont.name
+						font.family: AppSettings.appFont.length > 0 ? AppSettings.appFont : timerFont.name
 						// Sized from whichever is the real constraint: the panel's width, or
 						// the width its height would allow at 16:9. Using the width alone
 						// made the digits too tall for a short, wide panel, and the column

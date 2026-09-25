@@ -332,7 +332,11 @@ Rectangle
 		text: "Pomodoro"
 		color: "white"
 
-		font.family: textFont.name
+		// Keeps its script font through a change of app font, unless the settings say to
+		// use the chosen font here too.
+		property bool ownFont: true
+
+		font.family: AppSettings.fontOnTitle && AppSettings.appFont.length > 0 ? AppSettings.appFont : textFont.name
 		font.pixelSize: 35
 
 		anchors.horizontalCenter: parent.horizontalCenter
