@@ -55,7 +55,7 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOMODORO_VERSION=${{ github.ref_name }} -DPOMODORO_SPOTIFY_CLIENT_ID=${{ vars.SPOTIFY_CLIENT_ID }} -DCMAKE_INSTALL_PREFIX=/usr
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DPOMODORO_VERSION=${{ github.ref_name }}" "-DPOMODORO_SPOTIFY_CLIENT_ID=${{ vars.SPOTIFY_CLIENT_ID }}" -DCMAKE_INSTALL_PREFIX=/usr
           cmake --build build --parallel
 
       - name: Stage AppDir
@@ -131,9 +131,13 @@ jobs:
         with:
           arch: x64
 
+      # The -D arguments are quoted on every platform, and have to be here: this step runs
+      # in PowerShell, which splits an unquoted -DPOMODORO_VERSION=v1.4.0 at the first dot.
+      # CMake then got "v1" and ".4.0" as a stray path, and v1.4.0 for Windows shipped
+      # calling itself 0.0.0 -- so it kept offering its own release as an update.
       - name: Configure and build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOMODORO_VERSION=${{ github.ref_name }} -DPOMODORO_SPOTIFY_CLIENT_ID=${{ vars.SPOTIFY_CLIENT_ID }}
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DPOMODORO_VERSION=${{ github.ref_name }}" "-DPOMODORO_SPOTIFY_CLIENT_ID=${{ vars.SPOTIFY_CLIENT_ID }}"
           cmake --build build --parallel
 
       - name: Deploy Qt runtime
@@ -282,7 +286,7 @@ jobs:
 
       - name: Configure and build
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPOMODORO_VERSION=${{ github.ref_name }} -DPOMODORO_SPOTIFY_CLIENT_ID=${{ vars.SPOTIFY_CLIENT_ID }}
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DPOMODORO_VERSION=${{ github.ref_name }}" "-DPOMODORO_SPOTIFY_CLIENT_ID=${{ vars.SPOTIFY_CLIENT_ID }}"
           cmake --build build --parallel
 
       - name: Deploy Qt runtime and build dmg

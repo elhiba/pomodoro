@@ -30,10 +30,26 @@ if(NOT POMODORO_RESOLVED_VERSION)
 endif()
 
 # "v1.2.3", "1.2.3" and "v1.2.3-rc1" all come down to the three numbers project() accepts.
+# A version that was asked for and cannot be read stops the build: falling back to 0.0.0
+# there is how v1.4.0 for Windows shipped calling itself 0.0.0 (PowerShell had cut the
+# argument down to "v1"), and an app that thinks it is 0.0.0 offers every release as new.
 if(POMODORO_RESOLVED_VERSION MATCHES "([0-9]+\.[0-9]+\.[0-9]+)")
 	set(POMODORO_RESOLVED_VERSION "${CMAKE_MATCH_1}")
+elseif(POMODORO_VERSION)
+	message(FATAL_ERROR "POMODORO_VERSION is \"${POMODORO_VERSION}\", which is not a version like 1.2.3")
 else()
 	set(POMODORO_RESOLVED_VERSION "0.0.0")
+endif()
+
+# A local build takes its version from the newest tag, so CMake has to run again when the
+# tags change -- otherwise a build configured before the last release keeps the version it
+# had then until someone thinks to re-run cmake by hand.
+if(NOT POMODORO_VERSION AND IS_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+	foreach(gitFile HEAD packed-refs refs/tags)
+		if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git/${gitFile}")
+			set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/.git/${gitFile}")
+		endif()
+	endforeach()
 endif()
 
 project(pomodoro
