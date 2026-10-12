@@ -70,3 +70,21 @@ if(APPLE)
 	add_test(NAME TrayIconCocoa COMMAND tst_trayicon)
 	set_tests_properties(TrayIconCocoa PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=cocoa;QT_QUICK_BACKEND=software")
 endif()
+
+# Cache upgrade tests use the real bundled logo and application implementations.
+qt_add_executable(tst_iconcache
+	tst_iconcache.cpp
+	../src/core/MediaControls.cpp
+	../src/core/Notifier.cpp
+)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+	target_sources(tst_iconcache PRIVATE ../src/core/DesktopIntegrationLinux.cpp)
+endif()
+target_include_directories(tst_iconcache PRIVATE ../src/core)
+target_link_libraries(tst_iconcache PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::DBus Qt6::Test)
+qt_add_resources(tst_iconcache "test_logo"
+	PREFIX "/qt/qml/Pomodoro"
+	BASE ".."
+	FILES ../assets/icons/pomodoroLogoTransport.png
+)
+add_test(NAME IconCache COMMAND tst_iconcache)

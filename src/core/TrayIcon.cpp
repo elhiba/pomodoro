@@ -6,7 +6,7 @@
 
 namespace
 {
-	const char *const	IconResource = ":/qt/qml/Pomodoro/assets/icons/pomodoroLogoTransport.png";
+	const char *const	IconResource = ":/qt/qml/Pomodoro/assets/icons/pomodoroTray.png";
 }
 
 TrayIcon::TrayIcon(QObject *parent)

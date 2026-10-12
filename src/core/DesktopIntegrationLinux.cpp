@@ -1,4 +1,8 @@
 #include "ShellIdentity.hpp"
+#include "IconFile.hpp"
+
+#include <QBuffer>
+#include <QCryptographicHash>
 
 #include <QCoreApplication>
 #include <QDebug>
@@ -18,13 +22,11 @@
 // The same code covers a plain build being run from a directory.
 //
 // Deliberately conservative: the entry is rewritten only when it is missing or points at
-// a different binary, so moving or updating the AppImage fixes itself while a user who
-// deleted the entry on purpose does not get it back on every launch.
+// a different binary or logo, so the launcher follows the bundled image on upgrades.
 
 namespace
 {
 	const char *const	EntryName = "pomodoro.desktop";
-	const char *const	IconName = "pomodoro";
 
 	const char *const	IconResource = ":/qt/qml/Pomodoro/assets/icons/pomodoroLogoTransport.png";
 
@@ -41,32 +43,36 @@ namespace
 		return QCoreApplication::applicationFilePath();
 	}
 
-	// The icon has to be a real file on disk for the icon theme to find it, and the
-	// hicolor theme is the one every desktop falls back to.
-	bool	installIcon()
+	// Use an absolute path in the launcher so the shell need not discover a new
+	// name through a cached icon-theme index. Keep a standard size on disk.
+	QString	installIcon()
 	{
 		QString	directory = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation)
 			+ QStringLiteral("/icons/hicolor/256x256/apps");
 
 		if (!QDir().mkpath(directory))
-			return false;
-
-		QString	path = directory + QLatin1Char('/') + QLatin1String(IconName) + QStringLiteral(".png");
-
-		if (QFile::exists(path))
-			return true;
+			return QString();
 
 		QImage	image(QString::fromLatin1(IconResource));
 
 		if (image.isNull())
-			return false;
+			return QString();
 
-		// 256 is the largest size the hicolor directory above is declared for; the source
-		// logo is 500x500.
-		return image.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation).save(path, "PNG");
+		// Match the size declared by the hicolor directory, regardless of source size.
+		QByteArray data;
+		QBuffer buffer(&data);
+		if (!buffer.open(QIODevice::WriteOnly)
+			|| !image.scaled(256, 256, Qt::KeepAspectRatio, Qt::SmoothTransformation).save(&buffer, "PNG"))
+			return QString();
+		// A new name avoids reusing the same desktop icon cache key.
+		// Replacing pixels at the same name is not enough for a running GNOME session.
+		QString name = QStringLiteral("pomodoro-")
+			+ QString::fromLatin1(QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex().left(16));
+		QString path = directory + QLatin1Char('/') + name + QStringLiteral(".png");
+		return IconFile::writeIfChanged(path, data) ? path : QString();
 	}
 
-	QString	readExecLine(const QString &path)
+	QString	readEntryValue(const QString &path, const QString &key)
 	{
 		QFile	file(path);
 
@@ -77,14 +83,14 @@ namespace
 		{
 			QString	line = QString::fromUtf8(file.readLine()).trimmed();
 
-			if (line.startsWith(QLatin1String("Exec=")))
-				return line.mid(5).trimmed();
+			if (line.startsWith(key + QLatin1Char('=')))
+				return line.mid(key.size() + 1).trimmed();
 		}
 
 		return QString();
 	}
 
-	bool	writeEntry(const QString &path, const QString &target)
+	bool	writeEntry(const QString &path, const QString &target, const QString &iconPath)
 	{
 		QSaveFile	file(path);
 
@@ -106,7 +112,7 @@ namespace
 			"Categories=Utility;\n"
 			"Keywords=pomodoro;timer;focus;productivity;\n"
 			"StartupNotify=true\n"
-			"StartupWMClass=pomodoro\n").arg(target, QLatin1String(IconName));
+			"StartupWMClass=pomodoro\n").arg(target, iconPath);
 
 		file.write(entry.toUtf8());
 
@@ -125,19 +131,27 @@ void	registerShellIdentity()
 	QString	path = applications + QLatin1Char('/') + QLatin1String(EntryName);
 	QString	target = launcherPath();
 
+	// An upgrade can keep the same executable path while changing the bundled logo.
+	// Refresh the icon before deciding whether the launcher needs rewriting.
+	QString iconPath = installIcon();
+	if (iconPath.isEmpty())
+	{
+		qWarning("pomodoro: could not refresh the launcher icon");
+		return;
+	}
+
 	// Already describes this copy, so leave the user's launcher alone.
 	if (QFile::exists(path))
 	{
-		QString	current = readExecLine(path);
+		QString	current = readEntryValue(path, QStringLiteral("Exec"));
 
 		// The Exec line is written quoted, so compare against both spellings.
-		if (current == target || current == QLatin1Char('"') + target + QLatin1Char('"'))
+		if ((current == target || current == QLatin1Char('"') + target + QLatin1Char('"'))
+			&& readEntryValue(path, QStringLiteral("Icon")) == iconPath)
 			return;
 	}
 
-	installIcon();
-
-	if (!writeEntry(path, target))
+	if (!writeEntry(path, target, iconPath))
 	{
 		qWarning("pomodoro: could not write %s, the app will not appear in the launcher",
 			qPrintable(path));

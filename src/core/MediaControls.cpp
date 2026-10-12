@@ -1,7 +1,7 @@
 #include "MediaControls.hpp"
+#include "IconFile.hpp"
 
 #include <QDir>
-#include <QFile>
 #include <QStandardPaths>
 
 namespace
@@ -40,7 +40,7 @@ MediaControls	*MediaControls::create(QObject *parent)
 }
 
 // MPRIS wants a file URL and macOS wants an image it can load, neither of which can be
-// a qrc path. The same trick Notifier uses: unpack the logo into the cache once.
+// a qrc path. Refresh the cached logo when the bundled resource changes.
 void	MediaControls::setArtwork(const QString &)
 {
 }
@@ -54,18 +54,8 @@ QString	MediaControls::artworkPath()
 
 	QString	path = directory + QStringLiteral("/pomodoro-artwork.png");
 
-	if (QFile::exists(path))
-		return path;
-
-	QFile	source(QString::fromLatin1(IconResource));
-
-	if (!source.copy(path))
+	if (!IconFile::refreshResource(path, QString::fromLatin1(IconResource)))
 		return QString();
-
-	// Copies of resources come out read only, which would stop a later version of the
-	// logo from replacing this one.
-	QFile::setPermissions(path,
-		QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup | QFile::ReadOther);
 
 	return path;
 }

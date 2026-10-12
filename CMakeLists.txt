@@ -287,6 +287,7 @@ qt_add_qml_module(pomodoro
 		assets/icons/tasks.svg
 		assets/icons/pomodoroLogo.png
 		assets/icons/pomodoroLogoTransport.png
+		assets/icons/pomodoroTray.png
 
 		assets/sounds/alarmWood.wav
 		assets/sounds/button.wav

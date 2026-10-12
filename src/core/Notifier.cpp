@@ -1,8 +1,8 @@
 #include "Notifier.hpp"
+#include "IconFile.hpp"
 
 #include <QCoreApplication>
 #include <QDir>
-#include <QFile>
 #include <QImage>
 #include <QStandardPaths>
 #include <QDBusArgument>
@@ -59,7 +59,7 @@ namespace
 
 	constexpr int	TimeoutMs = 8000;
 
-	// The logo is 500x500. Sending that as raw RGBA would be a megabyte down the bus for
+	// Sending the full-size logo as raw RGBA would be several megabytes down the bus for
 	// every session that ends, and no notification is drawn anywhere near that big.
 	constexpr int	IconPixels = 128;
 }
@@ -78,8 +78,8 @@ Notifier::Notifier(QObject *parent)
 
 // The app_icon field takes either a themed icon name or a path to a real file. A themed
 // name only resolves once the desktop entry and icon are installed, so running from the
-// build directory would show no icon at all. Unpacking the resource into the cache once
-// means the notification looks right either way.
+// build directory would show no icon at all. Refreshing the cached resource when it
+// changes means the notification also picks up a new logo after an upgrade.
 void	Notifier::prepareIcon()
 {
 	QString	directory = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
@@ -89,18 +89,8 @@ void	Notifier::prepareIcon()
 
 	QString	path = directory + QStringLiteral("/pomodoro-notification.png");
 
-	if (!QFile::exists(path))
-	{
-		QFile	source(QString::fromLatin1(IconResource));
-
-		if (!source.copy(path))
-			return;
-
-		// Files copied out of the resources inherit the read only bit, which would stop
-		// a later version of the icon from ever replacing this one.
-		QFile::setPermissions(path,
-			QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup | QFile::ReadOther);
-	}
+	if (!IconFile::refreshResource(path, QString::fromLatin1(IconResource)))
+		return;
 
 	_iconPath = path;
 

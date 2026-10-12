@@ -37,7 +37,7 @@ class Notifier : public QObject
 	private:
 		bool	_available = false;
 
-		// Absolute path to a real file on disk, extracted from the resources once.
+		// Absolute path to a real file on disk, refreshed when the bundled resource changes.
 		QString	_iconPath;
 
 		// The same icon as raw pixels, built once, for daemons that want the image
