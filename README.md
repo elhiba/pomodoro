@@ -135,6 +135,23 @@ Every release and its full notes: [Releases](../../releases).
 
 Grab the latest build for your platform from the
 [**Releases**](../../releases/latest) page. Everything installs into your own user
+or you can use the cli
+```bash
+# linux
+curl -LO https://github.com/elhiba/pomodoro/releases/download/v1.6.0/pomodoro-v1.6.0-x86_64.AppImage
+
+# macos
+curl -LO https://github.com/elhiba/pomodoro/releases/download/v1.6.0/pomodoro-v1.6.0-macos.dmg
+```
+and than you can (for linux)
+```bash
+chmod +x pomodoro.AppImage
+mkdir -p ~/.local/bin/
+mv pomodoro-v1.6.0-x86_64.AppImage ~/.local/bin/pomodoro 
+# and dont forgot to add the ~/.local/bin/pomodoro to the PATH env (export PATH=$PATH:~/.local/bin)
+pomodoro
+```
+
 account — no administrator, no `sudo`.
 
 | Platform | File | How |
